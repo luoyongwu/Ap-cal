@@ -16,27 +16,38 @@ input_key = st.sidebar.text_input(
     type="password",
     value=st.session_state.ENV_CLAUDE_KEY,
     placeholder="sk-ant-api03-...",
-    help="密钥锁死在后台内存中，手机端 Safari 刷新 100% 不丢失。"
+    help="密钥锁死在后台内存中，断网或刷新 100% 不丢失。"
 )
+
 if input_key:
-    st.session_state.ENV_CLAUDE_KEY = input_key
+    st.session_state.ENV_CLAUDE_KEY = input_key.strip()
     os.environ["ANTHROPIC_API_KEY"] = input_key.strip()
 
 st.sidebar.markdown("---")
 lang_mode = st.sidebar.segmented_control("🌐 教学语言模式 / Language", ["中文 (CN)", "English (EN)"], default="中文 (CN)")
-model_option = st.sidebar.selectbox("🤖 核心大模型内核选择", ["claude-haiku-4-5-20251001", "claude-sonnet-4-5"])
 
-concept_option = st.sidebar.selectbox("核心微积分概念 / Concepts", [
-    "1.1 Concept of Approach (趋近的本质)",
-    "1.2 Two-Sided Limits (左右极限独立性)",
-    "1.3 Continuity 3-Conditions (连续性三承诺)",
-    "1.4 IVT (介值定理)",
-    "2.1 Instantaneous Rate (瞬时变化率哲学)",
-    "2.2 Definition of Derivative (导数定义的0/0拯救)",
-    "2.3 Corner and Cusp (连续但不可导的尖点对撞)",
-    "2.4 Chain Rule Essence (链式法则齿轮咬合)",
-    "🎓 Unit 1 & 2 阶段综合测试 (AP FRQ Style)"
-])
+# 🤖 默认采用极速、普适性强的 Haiku 4.5 内核，Sonnet 顺延可选
+model_option = st.sidebar.selectbox(
+    "🤖 核心大模型内核选择", 
+    ["claude-haiku-4-5-20251001", "claude-sonnet-4-5"],
+    index=0,
+    help="普通 API 密钥请务必保持默认 Haiku 选项，以确保极速响应与全账户兼容；Sonnet 仅限具备高级权限的账户升级使用。"
+)
+
+concept_option = st.sidebar.selectbox(
+    "核心微积分概念 / Concepts",
+    [
+        "1.1 Concept of Approach (趋近的本质)",
+        "1.2 Two-Sided Limits (左右极限独立性)",
+        "1.3 Continuity 3-Conditions (连续性三承诺)",
+        "1.4 IVT (介值定理)",
+        "2.1 Instantaneous Rate (瞬时变化率哲学)",
+        "2.2 Definition of Derivative (导数定义的0/0拯救)",
+        "2.3 Corner and Cusp (连续但不可导的尖点对撞)",
+        "2.4 Chain Rule Essence (链式法则齿轮咬合)",
+        "🎓 Unit 1 & 2 阶段综合测试 (AP FRQ Style)"
+    ]
+)
 
 unit_control_contract = {
     "anti_cheat_rules": {
@@ -84,90 +95,89 @@ welcome_matrix = {
     }
 }
 
+if "current_concept" not in st.session_state:
+    st.session_state.current_concept = ""
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "current_concept" not in st.session_state:
-    st.session_state.current_concept = concept_option
-if "current_lang" not in st.session_state:
-    st.session_state.current_lang = lang_mode
 
-# 🌐 历史栈全量翻译网关拦截过滤
-if st.session_state.current_lang != lang_mode and len(st.session_state.messages) > 0:
-    if st.session_state.ENV_CLAUDE_KEY.startswith("sk-ant"):
-        with st.spinner("🌐 正在为您一键全量翻译整个历史对话流..."):
-            try:
-                translator_client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
-                for msg in st.session_state.messages:
-                    # 拦截并保护核心欢迎语不参与重复性消耗翻译
-                    is_welcome = False
-                    for key in welcome_matrix:
-                        if msg["content"] in [welcome_matrix[key]["中文 (CN)"], welcome_matrix[key]["English (EN)"]]:
-                            is_welcome = True
-                            break
-                    if is_welcome:
-                        continue
-                    
-                    target_prompt = f"Translate the following AP Calculus Socratic dialogue message strictly into {lang_mode}. Keep mathematical formatting, icons, and tone identical: {msg['content']}"
-                    res = translator_client.messages.create(
-                        model="claude-haiku-4-5-20251001",
-                        max_tokens=1024,
-                        messages=[{"role": "user", "content": target_prompt}]
-                    )
-                    msg["content"] = res.content[0].text
-                st.session_state.current_lang = lang_mode
-            except:
-                pass
-
+# 概念切换自愈与重置机制
 if st.session_state.current_concept != concept_option:
     st.session_state.messages = []
     st.session_state.current_concept = concept_option
 
+# 欢迎词平铺触发
 if len(st.session_state.messages) == 0:
     welcome_text = welcome_matrix[concept_option][lang_mode]
     st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
 st.title("🎓 AP-Cal 苏格拉底交互式导师系统")
-st.caption("内核: {} | 模式: {} | 状态: 顶层常设刚性规则守护中 🟢".format(model_option, lang_mode))
+st.caption(f"内核核心: {model_option} | 当前聚焦概念: {concept_option}")
 
+# 渲染历史对话
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 📷 习题触发平铺触发机制
-if "综合测试" in concept_option or "Exam" in concept_option:
-    st.markdown("---")
-    uploaded_file = st.file_uploader("📷 移动端拍照上传手写草稿纸 (FRQ Submission Zone)", type=["png", "jpg", "jpeg"])
-    if uploaded_file is not None:
-        st.success("📝 手写卷面已安全送达后台，请在下方打字通知导师开始审计评分。")
+# 📸 完美渲染：file_uploader 标准组件
+if concept_option == "🎓 Unit 1 & 2 阶段综合测试 (AP FRQ Style)":
+    uploaded_file = st.file_uploader("📸 老师/同学：请上传您的手写 FRQ 卷面照片", type=["png", "jpg", "jpeg"])
+    if uploaded_file and f"uploaded_{uploaded_file.name}" not in st.session_state:
+        st.session_state[f"uploaded_{uploaded_file.name}"] = True
+        frq_notice = f"📷 [系统提示]: 手写卷面 `{uploaded_file.name}` 已安全送达总线。请在下方输入框中打出您的核心解题思路，导师将联合卷面进行苏格拉底式评判。"
+        st.session_state.messages.append({"role": "assistant", "content": frq_notice})
+        st.rerun()
 
-if user_input := st.chat_input("输入微积分想法..."):
-    if not st.session_state.ENV_CLAUDE_KEY.startswith("sk-ant"):
-        st.error("⚠️ 请先在左侧填入有效的 Claude API Key")
+# 📬 用户交互主循环输入
+if user_input := st.chat_input("在此输入您的微积分见解或疑问..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.chat_message("user"):
+        st.markdown(user_input)
+    
+    if not st.session_state.ENV_CLAUDE_KEY:
+        st.error("❌ 侧边栏检测到未填入 Claude API Key，请填入密钥后开启对话。")
     else:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.chat_message("user"):
-            st.markdown(user_input)
-            
         with st.chat_message("assistant"):
-            response_placeholder = st.empty()
-            with st.spinner("思考中..."):
+            with st.spinner("Cal 正在深度思考中..."):
                 try:
                     client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
                     
-                    system_prompt = f"You are an elite AP Calculus tutor. Maintain a rigorous yet encouraging Socratic teaching style. Always respond according to the selected mode: {lang_mode}."
+                    lang_label = "中文" if "CN" in lang_mode else "English"
+                    chain_rule_injection = ""
                     if "Chain Rule" in concept_option:
-                        system_prompt += "\n" + unit_control_contract["anti_cheat_rules"]["chain_rule_prompt"]
-                        
-                    api_messages = [{"role": msg["role"], "content": msg["content"]} for msg in st.session_state.messages]
+                        chain_rule_injection = unit_control_contract["anti_cheat_rules"]["chain_rule_prompt"]
                     
+                    system_prompt = f"""You are Cal, a Socratic AP Calculus tutor. 
+Current concept: {concept_option}
+Teaching language: {lang_label}
+STRICT RULE: Never give direct answers. Always guide with questions.
+Never reveal chain-of-thought. Ask one focused question at a time.
+{chain_rule_injection}"""
+                    
+                    # 🛡️ 双重熔断历史网关：拦截噪音、合并同角色连续消息、修剪头部非法助手消息
+                    formatted_messages = []
+                    for m in st.session_state.messages:
+                        if any(phrase in m["content"] for phrase in ["🤖 [AP-Cal", "📷 [系统提示]"]):
+                            continue
+                            
+                        if formatted_messages and formatted_messages[-1]["role"] == m["role"]:
+                            formatted_messages[-1]["content"] += "\n" + m["content"]
+                        else:
+                            formatted_messages.append({"role": m["role"], "content": m["content"]})
+                    
+                    while formatted_messages and formatted_messages[0]["role"] == "assistant":
+                        formatted_messages.pop(0)
+                    
+                    if not formatted_messages:
+                        formatted_messages.append({"role": "user", "content": user_input})
+                        
                     response = client.messages.create(
                         model=model_option,
-                        max_tokens=2048,
+                        max_tokens=1000,
                         system=system_prompt,
-                        messages=api_messages
+                        messages=formatted_messages
                     )
-                    output_text = response.content[0].text
-                    response_placeholder.markdown(output_text)
-                    st.session_state.messages.append({"role": "assistant", "content": output_text})
+                    reply = response.content[0].text
+                    st.markdown(reply)
+                    st.session_state.messages.append({"role": "assistant", "content": reply})
                 except Exception as e:
-                    st.error(f"API 调用故障: {str(e)}")
+                    st.error(f"💥 API 交互发生摩擦: {str(e)}")
