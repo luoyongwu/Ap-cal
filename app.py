@@ -56,6 +56,13 @@ if "messages" not in st.session_state:
 st.title(f"🎓 AP-Cal: {concept_option}")
 st.caption(f"当前管控模式：苏格拉底式启发教学 | 语言网关：{lang_option}")
 
+# 🚀 【核心修复点】：Streamlit 初始化页面时，如果历史为空，自动触发第一问，避免空白尴尬
+if len(st.session_state.messages) == 0:
+    st.session_state.messages.append({
+        "role": "assistant", 
+        "content": f"Hello! Welcome to AP-Cal. Today, let's explore **{concept_option}** together. To start, what is your current understanding of this topic, or do you have a specific problem you want to look at?"
+    })
+
 # 渲染历史对话流
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -67,12 +74,12 @@ def translate_via_claude(text_list, target_lang="Chinese", client=None):
         return text_list
     
     # 工业级清洗：剔除初始欢迎矩阵，只针对学生和老师的对话进行增量高净值翻译
-    cleaned_list = [t for t in text_list if "AP-Cal 概念矩阵已成功挂载" not in t and "concept matrix" not in t.lower()]
+    cleaned_list = [t for t in text_list if "AP-Cal" not in t and "concept matrix" not in t.lower()]
     if not cleaned_list:
         return text_list
 
     payload = "\n---\n".join(cleaned_list)
-    prompt = f"You are a professional AP Calculus translator. Translate the following dialogue into {target_lang}. Keep LaTeX formatting like $...$ or $$...$$ strictly untouched. Do not add any commentary.\n\n{payload}"
+    prompt = f"You are a professional AP Calculus translator. Translate the following AP Calculus teaching dialogue into {target_lang}. Keep LaTeX formatting like $...$ or $$...$$ strictly untouched. Do not add any introductory or ending commentary, reply with the translation only.\n\n{payload}"
     try:
         response = client.messages.create(
             model="claude-3-5-sonnet-20241022",
@@ -98,16 +105,17 @@ if student_input := st.chat_input("用英文输入你对这个概念的想法或
     with st.chat_message("user"):
         st.markdown(student_input)
         
-    # 2. 状态机刚性红线校验与修复（预防同角色连续碰撞引发 API 400 报错）
+    # 2. 🤖 【罗老师刚性审计修复】：状态机对齐防线，拒绝同角色碰撞
     sanitized_messages = []
     for msg in st.session_state.messages:
         if sanitized_messages and sanitized_messages[-1]["role"] == msg["role"]:
             sanitized_messages[-1]["content"] += f"\n{msg['content']}"
         else:
-            sanitized_messages.append({"role": msg.copy()})
+            # 刚性对齐字典格式，彻底告别 'content' KeyError
+            sanitized_messages.append({"role": msg["role"], "content": msg["content"]})
             
     # 裁剪头部非法助理回复
-    while sanitized_messages and sanitized_messages[0]["role"] == "assistant":
+    while sanitized_messages and sanitized_messages[0]["role"] == "assistant" and len(sanitized_messages) > 1:
         sanitized_messages.pop(0)
 
     # 3. 构造刚性 Prompt 教学大纲
@@ -125,12 +133,8 @@ if student_input := st.chat_input("用英文输入你对这个概念的想法或
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         try:
-            # 转换格式投射给 Claude
-            api_messages = []
-            for m in sanitized_messages:
-                # 兼容打包格式
-                content_data = m["content"]["content"] if isinstance(m["content"], dict) else m["content"]
-                api_messages.append({"role": m["role"], "content": content_data})
+            # 【罗老师审计精简方案】：流式清洗，直接对齐接口规范
+            api_messages = [{"role": m["role"], "content": m["content"]} for m in sanitized_messages]
 
             raw_response = client.messages.create(
                 model="claude-3-5-sonnet-20241022",
