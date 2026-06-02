@@ -10,15 +10,30 @@ st.sidebar.markdown("---")
 if "ENV_CLAUDE_KEY" not in st.session_state:
     st.session_state.ENV_CLAUDE_KEY = ""
 
+# 🔒 罗老师刚性审计：锁死安全交互暗箱
 input_key = st.sidebar.text_input(
     "🔑 请输入您的 Claude API Key:",
     type="password",
-    value=st.session_state.ENV_CLAUDE_KEY,
     placeholder="sk-ant-api03-...",
-    help="密钥锁死在后台内存中，手机端 Safari 刷新 100% 不丢失。"
+    help="👉 输入后【切勿按回车键】，也【切勿点击眼睛图标】。请直接点击下方的确认刚性锁定按钮！"
 )
-if input_key:
-    st.session_state.ENV_CLAUDE_KEY = input_key
+
+# 🚨 刚性物理清洗与锁死总线
+if st.sidebar.button("✅ 确认并刚性锁定密钥"):
+    if input_key:
+        # 工业级多层清洗：无情滤掉前后空格、换行符、残留的单双引号
+        clean_key = input_key.strip().replace('"', '').replace("'", "").strip()
+        st.session_state.ENV_CLAUDE_KEY = clean_key
+        st.sidebar.success("🟢 密钥已安全锁定，杂质清洗完毕！")
+        st.rerun()
+    else:
+        st.sidebar.warning("⚠️ 输入框为空，请输入有效密钥。")
+
+# 看板提示：清晰展示当前密钥状态，绝不回显真实内容
+if st.session_state.ENV_CLAUDE_KEY:
+    st.sidebar.info(f"🔒 后台状态：Key 已刚性对齐 (以 {st.session_state.ENV_CLAUDE_KEY[:6]}... 开头)")
+else:
+    st.sidebar.error("❌ 后台状态：等待密钥就位...")
 
 # 概念矩阵配置 (Unit 1 & Unit 2 全量 8 大核心概念完美集成)
 concept_matrix = {
@@ -56,24 +71,24 @@ if "messages" not in st.session_state:
 st.title(f"🎓 AP-Cal: {concept_option}")
 st.caption(f"当前管控模式：苏格拉底式启发教学 | 语言网关：{lang_option}")
 
-# 🚀 【核心修复点】：Streamlit 初始化页面时，如果历史为空，自动触发第一问，避免空白尴尬
+# 🚀 冷启动时自动触发第一问，并执行 st.rerun() 强制页面刷新渲染
 if len(st.session_state.messages) == 0:
     st.session_state.messages.append({
         "role": "assistant", 
         "content": f"Hello! Welcome to AP-Cal. Today, let's explore **{concept_option}** together. To start, what is your current understanding of this topic, or do you have a specific problem you want to look at?"
     })
+    st.rerun()  # 刚性打破页面渲染死锁
 
 # 渲染历史对话流
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 🔄 翻译网关底层驱动函数（规避系统欢迎语、严格防超限、抗格式脱落）
+# 🔄 翻译网关底层驱动函数（使用对齐后的全新模型名 claude-sonnet-4-5）
 def translate_via_claude(text_list, target_lang="Chinese", client=None):
     if not client or not text_list:
         return text_list
     
-    # 工业级清洗：剔除初始欢迎矩阵，只针对学生和老师的对话进行增量高净值翻译
     cleaned_list = [t for t in text_list if "AP-Cal" not in t and "concept matrix" not in t.lower()]
     if not cleaned_list:
         return text_list
@@ -82,7 +97,7 @@ def translate_via_claude(text_list, target_lang="Chinese", client=None):
     prompt = f"You are a professional AP Calculus translator. Translate the following AP Calculus teaching dialogue into {target_lang}. Keep LaTeX formatting like $...$ or $$...$$ strictly untouched. Do not add any introductory or ending commentary, reply with the translation only.\n\n{payload}"
     try:
         response = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
+            model="claude-sonnet-4-5",  # 升级全量翻译模型
             max_tokens=2000,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}]
@@ -95,7 +110,7 @@ def translate_via_claude(text_list, target_lang="Chinese", client=None):
 # 🚀 苏格拉底驱动核心逻辑
 if student_input := st.chat_input("用英文输入你对这个概念的想法或疑问..."):
     if not st.session_state.ENV_CLAUDE_KEY:
-        st.warning("⚠️ 教学控制台未检测到 Claude API Key，请先在左侧栏输入密钥锁死后台。")
+        st.warning("⚠️ 教学控制台未检测到 Claude API Key，请先在左侧栏输入密钥并点击确认按钮锁定后台。")
         st.stop()
         
     client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
@@ -105,16 +120,14 @@ if student_input := st.chat_input("用英文输入你对这个概念的想法或
     with st.chat_message("user"):
         st.markdown(student_input)
         
-    # 2. 🤖 【罗老师刚性审计修复】：状态机对齐防线，拒绝同角色碰撞
+    # 2. 状态机对齐防线
     sanitized_messages = []
     for msg in st.session_state.messages:
         if sanitized_messages and sanitized_messages[-1]["role"] == msg["role"]:
             sanitized_messages[-1]["content"] += f"\n{msg['content']}"
         else:
-            # 刚性对齐字典格式，彻底告别 'content' KeyError
             sanitized_messages.append({"role": msg["role"], "content": msg["content"]})
             
-    # 裁剪头部非法助理回复
     while sanitized_messages and sanitized_messages[0]["role"] == "assistant" and len(sanitized_messages) > 1:
         sanitized_messages.pop(0)
 
@@ -133,11 +146,10 @@ if student_input := st.chat_input("用英文输入你对这个概念的想法或
     with st.chat_message("assistant"):
         response_placeholder = st.empty()
         try:
-            # 【罗老师审计精简方案】：流式清洗，直接对齐接口规范
             api_messages = [{"role": m["role"], "content": m["content"]} for m in sanitized_messages]
 
             raw_response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-5",  # 升级主对话大模型
                 max_tokens=1000,
                 temperature=0.3,
                 system=system_prompt,
