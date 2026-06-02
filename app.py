@@ -4,37 +4,49 @@ from anthropic import Anthropic
 
 st.set_page_config(page_title="AP-Cal 智能辅导总线", page_icon="🎓", layout="wide")
 
-# 初始化后端内存中的 API Key 状态机
+# 初始化后端内存状态机
 if "ENV_CLAUDE_KEY" not in st.session_state:
     st.session_state.ENV_CLAUDE_KEY = ""
+if "click_count" not in st.session_state:
+    st.session_state.click_count = 0
 
 # 🏛️ 侧边栏控制台
 st.sidebar.title("🎓 AP-Cal 教学控制台")
 st.sidebar.markdown("---")
 
-# 1️⃣ 第一层：纯粹的输入框（仅用于承载粘贴的内容）
+# 📥 框 1：纯粹的输入接收框
 input_key = st.sidebar.text_input(
     "🔑 步骤 1：请在此粘贴您的 Claude API Key:", 
     type="password", 
     value=st.session_state.ENV_CLAUDE_KEY, 
-    placeholder="sk-ant-api03-..."
+    placeholder="sk-ant-api..."
 )
 
-# 2️⃣ 第二层：物理锁定提交按钮（彻底解决不知按哪里的死锁！）
-# 任何时候点击它，都会强行把输入框的值写入系统底层
-if st.sidebar.button("⚡ 步骤 2：【点击此处】物理激活并锁定密钥"):
+# ⚡ 框 2：点击框（按钮动作触发区）
+click_action = st.sidebar.button("⚡ 步骤 2：【鼠标点击此处】物理提交输入")
+
+# 🛡️ 动作状态校验防线：专门用来告诉老师“点击按钮本身有效”！
+if click_action:
+    st.session_state.click_count += 1
     if input_key.strip():
         st.session_state.ENV_CLAUDE_KEY = input_key.strip()
         os.environ["ANTHROPIC_API_KEY"] = st.session_state.ENV_CLAUDE_KEY
     else:
-        st.sidebar.warning("⚠️ 请先在上方输入框粘贴密钥，再点击激活！")
+        st.session_state.ENV_CLAUDE_KEY = ""
 
-# 3️⃣ 第三层：独立的状态回显框（与输入及提交区域完全隔离）
-st.sidebar.markdown("⬇️ **当前底座密钥点火状态回显：**")
-if st.session_state.ENV_CLAUDE_KEY:
-    st.sidebar.success("🟢 密钥激活成功！AI 底座已锁死，请在右侧畅快死磕。")
-else:
-    st.sidebar.error("🔴 密钥未激活！底座处于断线状态。请执行步骤1和步骤2。")
+# 如果检测到用户刚刚点击过按钮，立刻强制弹框回显，确保点击感知绝对明显
+if click_action:
+    st.sidebar.warning(f"📥 验证：已成功接收您的第 {st.session_state.click_count} 次物理点击提交！")
+
+st.sidebar.markdown("---")
+
+# 🔍 框 3：完全独立的“系统认可与底座鉴权结果”框（与点击动作隔离）
+st.sidebar.markdown("### 📋 大模型底座系统认可状态")
+with st.sidebar.container(border=True): # 刚性容器隔离框
+    if st.session_state.ENV_CLAUDE_KEY:
+        st.success("🟢 认可结果：系统已成功接纳并锁死了该密钥！AI 引擎点火完毕。")
+    else:
+        st.error("🔴 认可结果：当前底座尚未检测到有效激活凭证，AI 正处于挂起状态。")
 
 st.sidebar.markdown("---")
 
@@ -53,10 +65,10 @@ concept_option = st.sidebar.selectbox(
     ]
 )
 
-# 🌐 翻译语言网关控制
+# 🌐 界面翻译语言网关
 lang_label = st.sidebar.radio("🌐 界面翻译网关语言 / Language Switch:", ["中文 (Chinese)", "English"])
 
-# 🔄 跨概念切换重置状态机
+# 🔄 状态机切换熔断
 if "current_concept" not in st.session_state:
     st.session_state.current_concept = concept_option
 if st.session_state.current_concept != concept_option:
@@ -64,16 +76,15 @@ if st.session_state.current_concept != concept_option:
     st.session_state.current_concept = concept_option
 
 if "messages" not in st.session_state or len(st.session_state.messages) == 0:
-    # 欢迎矩阵
     welcome_matrix = {
         "1.1 Limits Chronology (极限的直观引入与定义)": "Welcome! Let's explore how a function behaves as it infinitely approaches a point. Think about $f(x)=\\frac{x^2-1}{x-1}$ at $x=1$. What happens?",
         "1.2 Asymptotes & Infinity (无穷大与渐近线行为)": "Welcome! When the denominator shrinks to zero, the function value explodes. Let's touch the edge of infinity.",
         "1.3 Continuity & IVT (连续性定义与介值定理)": "Welcome! No holes, no jumps, no vertical asymptotes. If a continuous function goes from negative to positive, it MUST cross zero.",
         "1.4 Squeeze Theorem (夹逼定理的代数与几何夹击)": "Welcome! Locked from above, trapped from below. If two functions squeeze a middle one, its limit is absolute.",
-        "2.1 Derivative Definition (导数的极限 definition)": "Welcome! Instantaneous change is born from average change. Let's master the limit of the difference quotient.",
-        "2.2 Power/Product/Quotient Rules (三大基础求导法则)": "Welcome! Let's shift our gear from limit calculations to structural shortcuts.",
+        "2.1 Derivative Definition (导数的极限定义与割线变切线)": "Welcome! Instantaneous change is born from average change. Let's master the limit of the difference quotient.",
+        "2.2 Power/Product/Quotient Rules (三大基础求导法则)": "Welcome! Let's shift our gear from limit calculations to shortcuts.",
         "2.3 Chain Rule & Implicit (复合函数求导与隐函数微分)": "Welcome! Peeling the onion layer by layer. Let's crack nested functions.",
-        "2.4 Higher-Order Derivatives (高阶导数与物理变化率)": "Welcome! The derivative of velocity is acceleration. Let's observe rates of change."
+        "2.4 Higher-Order Derivatives (高阶导数与物理变化率)": "Welcome! Let's observe rates of change."
     }
     st.session_state.messages = [{"role": "assistant", "content": welcome_matrix[st.session_state.current_concept]}]
 
@@ -86,7 +97,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# 📷 移动端拍照上传/手写习题交互模块
+# 📷 移动端拍照上传通道
 st.markdown("---")
 st.subheader("📷 移动设备多模态答题通道")
 uploaded_file = st.file_uploader("📝 在纸上写下您的推导步骤，拍照上传反馈：", type=["png", "jpg", "jpeg"])
@@ -114,15 +125,14 @@ if final_input:
     st.session_state.messages.append({"role": "user", "content": final_input})
     st.rerun()
 
-# 核心逻辑运算流（仅在有最新输入且密钥锁定的情况下执行）
+# 核心逻辑运算流（仅在有最新输入且系统认可密钥的情况下执行）
 if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     if not st.session_state.ENV_CLAUDE_KEY:
-        st.warning("⚠️ 无法发送请求！请确保左侧侧边栏已执行【步骤2】激活并锁定了密钥！")
+        st.warning("⚠️ 传输拦截：模型未能被激发。请确保在左侧侧边栏通过【步骤2】锁定并使系统认可您的密钥！")
     else:
         try:
             client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
             
-            # 协议级自愈防线：合并连续相同角色
             cleaned_history = []
             for m in st.session_state.messages:
                 if cleaned_history and cleaned_history[-1]["role"] == m["role"]:
@@ -140,9 +150,10 @@ if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] 
                 "4. Absolutely never reveal your chain-of-thought (CoT)."
             )
             
-            with st.spinner("⚡ Luo-cal 正在深度演算对话流..."):
+            with st.spinner("⚡ Luo-cal 正在呼叫当前最新大模型底座..."):
+                # 刚性锁定当前唯一最新可用模型标识符
                 response = client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model="claude-sonnet-4-6",
                     max_tokens=1548,
                     system=system_prompt,
                     messages=cleaned_history
