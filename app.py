@@ -4,31 +4,37 @@ from anthropic import Anthropic
 
 st.set_page_config(page_title="AP-Cal 智能辅导总线", page_icon="🎓", layout="wide")
 
+# 初始化后端内存中的 API Key 状态机
+if "ENV_CLAUDE_KEY" not in st.session_state:
+    st.session_state.ENV_CLAUDE_KEY = ""
+
 # 🏛️ 侧边栏控制台
 st.sidebar.title("🎓 AP-Cal 教学控制台")
 st.sidebar.markdown("---")
 
-if "ENV_CLAUDE_KEY" not in st.session_state:
-    st.session_state.ENV_CLAUDE_KEY = ""
-
-# 🔑 醒目的 Key 输入和状态回显防线
+# 1️⃣ 第一层：纯粹的输入框（仅用于承载粘贴的内容）
 input_key = st.sidebar.text_input(
-    "🔑 请输入您的 Claude API Key:", 
+    "🔑 步骤 1：请在此粘贴您的 Claude API Key:", 
     type="password", 
     value=st.session_state.ENV_CLAUDE_KEY, 
     placeholder="sk-ant-api03-..."
 )
 
-if input_key:
-    st.session_state.ENV_CLAUDE_KEY = input_key
+# 2️⃣ 第二层：物理锁定提交按钮（彻底解决不知按哪里的死锁！）
+# 任何时候点击它，都会强行把输入框的值写入系统底层
+if st.sidebar.button("⚡ 步骤 2：【点击此处】物理激活并锁定密钥"):
+    if input_key.strip():
+        st.session_state.ENV_CLAUDE_KEY = input_key.strip()
+        os.environ["ANTHROPIC_API_KEY"] = st.session_state.ENV_CLAUDE_KEY
+    else:
+        st.sidebar.warning("⚠️ 请先在上方输入框粘贴密钥，再点击激活！")
 
-# 🟢🔴 刚性状态指示灯回归！让老师一眼看清当前状态
+# 3️⃣ 第三层：独立的状态回显框（与输入及提交区域完全隔离）
+st.sidebar.markdown("⬇️ **当前底座密钥点火状态回显：**")
 if st.session_state.ENV_CLAUDE_KEY:
-    st.sidebar.success("🟢 密钥已锁定！大模型底座随时可以点火。")
-    # 物理注入系统环境变量，双重保险
-    os.environ["ANTHROPIC_API_KEY"] = st.session_state.ENV_CLAUDE_KEY
+    st.sidebar.success("🟢 密钥激活成功！AI 底座已锁死，请在右侧畅快死磕。")
 else:
-    st.sidebar.error("🔴 密钥未载入！大模型正处于断线锁定状态。")
+    st.sidebar.error("🔴 密钥未激活！底座处于断线状态。请执行步骤1和步骤2。")
 
 st.sidebar.markdown("---")
 
@@ -50,35 +56,30 @@ concept_option = st.sidebar.selectbox(
 # 🌐 翻译语言网关控制
 lang_label = st.sidebar.radio("🌐 界面翻译网关语言 / Language Switch:", ["中文 (Chinese)", "English"])
 
-# 🔄 状态机初始化
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# 🔄 跨概念切换重置状态机
 if "current_concept" not in st.session_state:
     st.session_state.current_concept = concept_option
-
-# 跨概念切换时安全熔断，重置清空历史栈
 if st.session_state.current_concept != concept_option:
     st.session_state.messages = []
     st.session_state.current_concept = concept_option
 
-# 🎨 主界面布局
+if "messages" not in st.session_state or len(st.session_state.messages) == 0:
+    # 欢迎矩阵
+    welcome_matrix = {
+        "1.1 Limits Chronology (极限的直观引入与定义)": "Welcome! Let's explore how a function behaves as it infinitely approaches a point. Think about $f(x)=\\frac{x^2-1}{x-1}$ at $x=1$. What happens?",
+        "1.2 Asymptotes & Infinity (无穷大与渐近线行为)": "Welcome! When the denominator shrinks to zero, the function value explodes. Let's touch the edge of infinity.",
+        "1.3 Continuity & IVT (连续性定义与介值定理)": "Welcome! No holes, no jumps, no vertical asymptotes. If a continuous function goes from negative to positive, it MUST cross zero.",
+        "1.4 Squeeze Theorem (夹逼定理的代数与几何夹击)": "Welcome! Locked from above, trapped from below. If two functions squeeze a middle one, its limit is absolute.",
+        "2.1 Derivative Definition (导数的极限 definition)": "Welcome! Instantaneous change is born from average change. Let's master the limit of the difference quotient.",
+        "2.2 Power/Product/Quotient Rules (三大基础求导法则)": "Welcome! Let's shift our gear from limit calculations to structural shortcuts.",
+        "2.3 Chain Rule & Implicit (复合函数求导与隐函数微分)": "Welcome! Peeling the onion layer by layer. Let's crack nested functions.",
+        "2.4 Higher-Order Derivatives (高阶导数与物理变化率)": "Welcome! The derivative of velocity is acceleration. Let's observe rates of change."
+    }
+    st.session_state.messages = [{"role": "assistant", "content": welcome_matrix[st.session_state.current_concept]}]
+
+# 🎨 渲染主界面布局
 st.title("🎓 Luo-cal 智能微积分交互教学总线")
 st.caption(f"当前死磕概念：{st.session_state.current_concept} | 语言：{lang_label}")
-
-# 渲染欢迎词矩阵
-welcome_matrix = {
-    "1.1 Limits Chronology (极限的直观引入与定义)": "Welcome! Let's explore how a function behaves as it infinitely approaches a point. Think about $f(x)=\\frac{x^2-1}{x-1}$ at $x=1$. What happens?",
-    "1.2 Asymptotes & Infinity (无穷大与渐近线行为)": "Welcome! When the denominator shrinks to zero, the function value explodes. Let's touch the edge of infinity.",
-    "1.3 Continuity & IVT (连续性定义与介值定理)": "Welcome! No holes, no jumps, no vertical asymptotes. If a continuous function goes from negative to positive, it MUST cross zero.",
-    "1.4 Squeeze Theorem (夹逼定理的代数与几何夹击)": "Welcome! Locked from above, trapped from below. If two functions squeeze a middle one, its limit is absolute.",
-    "2.1 Derivative Definition (导数的极限定义与割线变切线)": "Welcome! Instantaneous change is born from average change. Let's master the limit of the difference quotient.",
-    "2.2 Power/Product/Quotient Rules (三大基础求导法则)": "Welcome! Let's shift our gear from limit calculations to structural shortcuts. Ready for the mechanics of differentiation?",
-    "2.3 Chain Rule & Implicit (复合函数求导与隐函数微分)": "Welcome! Peeling the onion layer by layer. Let's crack the rate of change of nested functions.",
-    "2.4 Higher-Order Derivatives (高阶导数与物理变化率)": "Welcome! The derivative of velocity is acceleration. Let's observe how the rate of change itself changes."
-}
-
-if len(st.session_state.messages) == 0:
-    st.session_state.messages.append({"role": "assistant", "content": welcome_matrix[st.session_state.current_concept]})
 
 # 渲染历史会话
 for msg in st.session_state.messages:
@@ -90,21 +91,19 @@ st.markdown("---")
 st.subheader("📷 移动设备多模态答题通道")
 uploaded_file = st.file_uploader("📝 在纸上写下您的推导步骤，拍照上传反馈：", type=["png", "jpg", "jpeg"])
 if uploaded_file:
-    st.success("🎉 图片捕获成功！Luo-cal 异步多模态 Vision 模块已就绪，准备扫描解题步骤。")
+    st.success("🎉 图片捕获成功！准备扫描解题步骤。")
 
 st.markdown("---")
-# 🔑 习题控制及机制面板
 st.subheader("🎯 习题触发控制中心")
 col1, col2 = st.columns(2)
 with col1:
-    st.info("💡 **通道A (自动触发)**: 苏格拉底交互闭环已挂载。模型会自动判断您的掌握程度，随时切入提问。")
+    st.info("💡 **通道A (自动触发)**: 苏格拉底交互闭环已挂载。模型会自动判断您的掌握程度并随时提问。")
 with col2:
     trigger_exam = st.button("🚀 显式触发：向模型索要当前概念 AP 风格习题")
 
-# 💬 师生交互输入主干（支持按回车直接提交）
+# 💬 师生交互输入主干
 user_input = st.chat_input("在此输入您的微积分想法，或直接对模型说：'请给我出一道题'...")
 
-# 逻辑合并：无论是用户输入，还是点击了显式触发按钮
 final_input = ""
 if user_input:
     final_input = user_input
@@ -113,11 +112,12 @@ elif trigger_exam:
 
 if final_input:
     st.session_state.messages.append({"role": "user", "content": final_input})
-    with st.chat_message("user"):
-        st.markdown(final_input)
-        
+    st.rerun()
+
+# 核心逻辑运算流（仅在有最新输入且密钥锁定的情况下执行）
+if len(st.session_state.messages) > 0 and st.session_state.messages[-1]["role"] == "user":
     if not st.session_state.ENV_CLAUDE_KEY:
-        st.warning("⚠️ 提示：请在左侧侧边栏输入您的 Claude API Key 以激活 AI 底座对话！")
+        st.warning("⚠️ 无法发送请求！请确保左侧侧边栏已执行【步骤2】激活并锁定了密钥！")
     else:
         try:
             client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
@@ -130,14 +130,13 @@ if final_input:
                 else:
                     cleaned_history.append({"role": m["role"], "content": m["content"]})
             
-            # 严格遵循约定的系统提示词（严防泄露思维链、苏格拉底式提问）
             system_prompt = (
                 f"Current concept: {st.session_state.current_concept}.\n"
-                f"Language网关切换为: {lang_label}.\n"
+                f"Language: {lang_label}.\n"
                 "STRICT RULE:\n"
-                "1. Never give direct answers or results. Always guide the student step-by-step using Socratic questions.\n"
+                "1. Never give direct answers. Always guide step-by-step using Socratic questions.\n"
                 "2. Assess student level (Basic/Partial/Mastered) and dynamic trigger exercise when appropriate.\n"
-                "3. For AP Style problem requests: generate realistic AP-level multiple-choice or free-response questions based on the current concept. Provide the encrypted answer key only inside markdown spoilers if forced.\n"
+                "3. For AP Style problem requests: generate realistic AP-level multiple-choice or free-response questions based on the current concept. Provide encrypted key inside markdown spoilers.\n"
                 "4. Absolutely never reveal your chain-of-thought (CoT)."
             )
             
@@ -149,8 +148,7 @@ if final_input:
                     messages=cleaned_history
                 )
                 assistant_res = response.content[0].text
-                
                 st.session_state.messages.append({"role": "assistant", "content": assistant_res})
                 st.rerun()
         except Exception as e:
-            st.error(f"❌ 大模型底座运行摩擦: {str(e)}")
+            st.error(f"❌ 系统摩擦报错详情: {str(e)}")
