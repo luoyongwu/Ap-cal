@@ -31,14 +31,11 @@ selected_unit = st.sidebar.selectbox("📂 选择 Unit:", list(CONTENT_MATRIX.ke
 concept = st.sidebar.selectbox("🎯 选择 Concept:", CONTENT_MATRIX[selected_unit])
 lang = st.sidebar.radio("🌐 语言:", ["Chinese", "English"])
 
-# 修复：Unit 切换清空历史，语言切换仅触发刷新
-if selected_unit != st.session_state.curr_unit:
+# ✅ 罗老师核心修复：Unit 切换 或 语言切换，统一清空历史，触发新语言/新 Unit 首题自启
+if selected_unit != st.session_state.curr_unit or lang != st.session_state.curr_lang:
     st.session_state.curr_unit = selected_unit
-    st.session_state.messages = []
-    st.rerun()
-
-if lang != st.session_state.curr_lang:
     st.session_state.curr_lang = lang
+    st.session_state.messages = []
     st.rerun()
 
 st.title(f"{selected_unit} - {concept}")
@@ -50,9 +47,10 @@ def get_ai_response():
         st.stop()
         
     client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
-    system_msg = f"You are an AP tutor. Language: {st.session_state.curr_lang}. Rules: Use LaTeX. Socratic method (guide, don't answer). Ask one question at a time."
+    # ✅ 修正点2：显式强制指令，防止大模型发生语言混淆
+    system_msg = f"You are an AP Calculus tutor. Respond entirely in {'Chinese (简体中文)' if st.session_state.curr_lang == 'Chinese' else 'English'}. Rules: Use LaTeX for all math expressions. Use Socratic method: guide the student with hints and questions, never give away the full answer directly. Ask only one question at a time."
     
-    with st.spinner("⏳ 正在思考并翻译..."):
+    with st.spinner("⏳ 正在思考..."):
         response = client.messages.create(
             model=MODEL_NAME,
             max_tokens=1500,
@@ -64,7 +62,8 @@ def get_ai_response():
 # --- 逻辑流 ---
 # 1. 首题自动加载
 if not st.session_state.messages:
-    first_prompt = f"请针对 {concept} 给出第一道 AP 风格习题。"
+    # ✅ 修正点3：首题 Prompt 动态进行中英文对齐
+    first_prompt = f"请针对 {concept} 给出第一道 AP 风格习题。" if st.session_state.curr_lang == "Chinese" else f"Please give me the first AP-style problem for {concept}."
     st.session_state.messages.append({"role": "user", "content": first_prompt})
     res = get_ai_response()
     if res:
@@ -77,17 +76,20 @@ for msg in st.session_state.messages:
         st.markdown(msg["content"])
 
 # 3. 输入处理
-if prompt := st.chat_input("请输入问题或上传解析..."):
+placeholder_text = "请输入你的解答或问题..." if st.session_state.curr_lang == "Chinese" else "Enter your answer or question..."
+if prompt := st.chat_input(placeholder_text):
     st.session_state.messages.append({"role": "user", "content": prompt})
     res = get_ai_response()
     if res:
         st.session_state.messages.append({"role": "assistant", "content": res})
         st.rerun()
 
-# 4. 按钮处理
-if st.button("▶️ 刷新/下一题"):
-    prompt = f"请针对 {concept} 继续出下一道 AP 难度习题。"
-    st.session_state.messages.append({"role": "user", "content": prompt})
+# 4. 下一题按钮
+# ✅ 修正点4：按钮标签文本动态切换
+btn_label = "▶️ 下一题" if st.session_state.curr_lang == "Chinese" else "▶️ Next Problem"
+if st.button(btn_label):
+    next_prompt = f"请针对 {concept} 继续出下一道 AP 难度习题。" if st.session_state.curr_lang == "Chinese" else f"Please give me the next AP-level problem for {concept}."
+    st.session_state.messages.append({"role": "user", "content": next_prompt})
     res = get_ai_response()
     if res:
         st.session_state.messages.append({"role": "assistant", "content": res})
