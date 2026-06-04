@@ -92,7 +92,7 @@ def get_ai_response(extra_content=None):
 # ── 5. 图片处理（独立分支修复版） ──────────────────────────────
 with st.expander("📷 上传作业照片 / 拍照"):
     t1, t2 = st.tabs(["📸 实时拍照", "🖼️ 相册选图"])
-    with t1: cam = st.camera_input("对准题目，点击拍照")
+    with t1: cam = st.camera_input("拍照")
     with t2: up = st.file_uploader("文件", type=["jpg", "jpeg", "png", "webp"])
     
     if cam is not None:
@@ -125,8 +125,11 @@ if col_n.button("▶️ 下一题"):
     st.rerun()
 
 if not st.session_state.messages:
-    st.session_state.messages.append({"role": "user", "content": "出第一题。"})
-    st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
+    with st.chat_message("assistant"): st.markdown("⏳ 导师正在为您准备第一题…")
+    init_p = "请针对此概念出第一道题并引导我。" if st.session_state.curr_lang == "Chinese" else "Give me the first problem for this concept."
+    reply = get_ai_response(extra_content=[{"type": "text", "text": init_p}])
+    st.session_state.messages.append({"role": "user", "content": init_p})
+    st.session_state.messages.append({"role": "assistant", "content": reply})
     st.rerun()
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
