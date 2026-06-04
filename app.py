@@ -1,33 +1,36 @@
 import streamlit as st
 from anthropic import Anthropic
+import base64
 
 MODEL_NAME = "claude-sonnet-4-6"
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
-# ── 初始化 ──────────────────────────────────────────────
-if "messages"       not in st.session_state: st.session_state.messages       = []
-if "ENV_CLAUDE_KEY" not in st.session_state: st.session_state.ENV_CLAUDE_KEY = ""
-if "curr_lang"      not in st.session_state: st.session_state.curr_lang      = "Chinese"
-if "curr_unit"      not in st.session_state: st.session_state.curr_unit      = "第一单元: 极限与连续"
+# ── 1. 状态初始化 ──────────────────────────────────────────
+for k, v in {
+    "messages": [],
+    "api_key": "",
+    "curr_lang": "Chinese",
+    "curr_unit": "第一单元: 极限与连续",
+    "pending_image": None,
+    "pending_media_type": None,
+}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-# ── 概念矩阵与约束字典 ──────────────────────────────────
+# ── 2. 核心教学配置 ──────────────────────────────────────────
 BILINGUAL_MATRIX = {
-    "Chinese": {
-        "Units": {
-            "第一单元: 极限与连续": ["1.1 极限简介", "1.2 渐近线", "1.3 连续性", "1.4 夹逼定理", "1.5 介值定理"],
-            "第二单元: 导数基础": ["2.1 导数定义", "2.2 幂/乘积法则", "2.3 链式法则", "2.4 高阶导数"],
-            "第三单元: 复合、隐函数与反函数微分": ["3.1 链式法则进阶", "3.2 隐函数求导", "3.3 反函数", "3.4 反函数导数"],
-            "第四单元: 微分的情境应用": ["4.1 相关变化率", "4.2 洛必达法则", "4.3 均值定理", "4.4 极值与拐点", "4.5 线性近似"]
-        }
-    },
-    "English": {
-        "Units": {
-            "Unit 1: Limits & Continuity": ["1.1 Limits Intro", "1.2 Asymptotes", "1.3 Continuity", "1.4 Squeeze Theorem", "1.5 Intermediate Value Theorem"],
-            "Unit 2: Derivatives": ["2.1 Derivative Definition", "2.2 Power/Product Rules", "2.3 Chain Rule", "2.4 Higher-Order Derivatives"],
-            "Unit 3: Composite, Implicit & Inverse": ["3.1 Chain Rule Advanced", "3.2 Implicit Differentiation", "3.3 Inverse Functions", "3.4 Derivatives of Inverse"],
-            "Unit 4: Contextual Applications": ["4.1 Related Rates", "4.2 L'Hopital's Rule", "4.3 Mean Value Theorem", "4.4 Extrema & Inflection", "4.5 Linear Approximation"]
-        }
-    }
+    "Chinese": {"Units": {
+        "第一单元: 极限与连续": ["1.1 极限简介","1.2 渐近线","1.3 连续性","1.4 夹逼定理","1.5 介值定理"],
+        "第二单元: 导数基础": ["2.1 导数定义","2.2 幂/乘积法则","2.3 链式法则","2.4 高阶导数"],
+        "第三单元: 复合、隐函数与反函数微分": ["3.1 链式法则进阶","3.2 隐函数求导","3.3 反函数","3.4 反函数导数"],
+        "第四单元: 微分的情境应用": ["4.1 相关变化率","4.2 洛必达法则","4.3 均值定理","4.4 极值与拐点","4.5 线性近似"],
+    }},
+    "English": {"Units": {
+        "Unit 1: Limits & Continuity": ["1.1 Limits Intro","1.2 Asymptotes","1.3 Continuity","1.4 Squeeze Theorem","1.5 Intermediate Value Theorem"],
+        "Unit 2: Derivatives": ["2.1 Derivative Definition","2.2 Power/Product Rules","2.3 Chain Rule","2.4 Higher-Order Derivatives"],
+        "Unit 3: Composite, Implicit & Inverse": ["3.1 Chain Rule Advanced","3.2 Implicit Differentiation","3.3 Inverse Functions","3.4 Derivatives of Inverse"],
+        "Unit 4: Contextual Applications": ["4.1 Related Rates","4.2 L'Hopital's Rule","4.3 Mean Value Theorem","4.4 Extrema & Inflection","4.5 Linear Approximation"],
+    }},
 }
 
 CONCEPT_CONSTRAINTS = {
@@ -42,24 +45,30 @@ CONCEPT_CONSTRAINTS = {
     "4.4": "Require sign chart analysis and explicit concavity statement.", "4.5": "State L(x) = f(a) + f'(a)(x-a) as premise."
 }
 
-# ── 界面 UI ─────────────────────────────────────────────
+# ── 3. 侧边栏 UI ───────────────────────────────────────────
 st.sidebar.title("🎓 Luo-cal 教学控制台")
-key_input = st.sidebar.text_input("🔑 API Key:", type="password", value=st.session_state.ENV_CLAUDE_KEY)
-if key_input.strip():
-    st.session_state.ENV_CLAUDE_KEY = key_input.strip()
+stored_key = st.session_state.api_key
+placeholder = ("*" * 8 + stored_key[-4:]) if len(stored_key) > 8 else ("*" * len(stored_key) if stored_key else "请粘贴 Claude API Key")
+key_input = st.sidebar.text_input("🔑 API Key:", type="password", value="", placeholder=placeholder)
+if key_input.strip(): st.session_state.api_key = key_input.strip()
+
+if st.session_state.api_key: st.sidebar.success("🟢 密钥已锁定")
+else: st.sidebar.warning("🔴 请输入 API Key")
 
 lang = st.sidebar.radio("🌐 语言:", ["Chinese", "English"], index=["Chinese", "English"].index(st.session_state.curr_lang))
 if lang != st.session_state.curr_lang:
     old_units = list(BILINGUAL_MATRIX[st.session_state.curr_lang]["Units"].keys())
     new_units = list(BILINGUAL_MATRIX[lang]["Units"].keys())
-    try: idx = old_units.index(st.session_state.curr_unit); st.session_state.curr_unit = new_units[idx]
+    try: st.session_state.curr_unit = new_units[old_units.index(st.session_state.curr_unit)]
     except: st.session_state.curr_unit = new_units[0]
     st.session_state.curr_lang = lang
     st.session_state.messages = []
     st.rerun()
 
 units_map = BILINGUAL_MATRIX[st.session_state.curr_lang]["Units"]
-selected_unit = st.sidebar.selectbox("📂 选择 Unit:", list(units_map.keys()), index=list(units_map.keys()).index(st.session_state.curr_unit))
+unit_keys = list(units_map.keys())
+if st.session_state.curr_unit not in unit_keys: st.session_state.curr_unit = unit_keys[0]
+selected_unit = st.sidebar.selectbox("📂 选择 Unit:", unit_keys, index=unit_keys.index(st.session_state.curr_unit))
 if selected_unit != st.session_state.curr_unit:
     st.session_state.curr_unit = selected_unit
     st.session_state.messages = []
@@ -68,36 +77,60 @@ if selected_unit != st.session_state.curr_unit:
 concept = st.sidebar.selectbox("🎯 选择 Concept:", units_map[selected_unit])
 st.title(f"{selected_unit} — {concept}")
 
-# ── 响应引擎（含防御性 Key 检查） ───────────────────────
-def get_ai_response():
-    if not st.session_state.ENV_CLAUDE_KEY:
-        st.warning("⚠️ 请输入 Claude API Key 以激活教学引擎。")
-        st.stop()
-    client = Anthropic(api_key=st.session_state.ENV_CLAUDE_KEY)
+# ── 4. 引擎核心 ─────────────────────────────────────────────
+def get_ai_response(extra_content=None):
+    if not st.session_state.api_key: st.warning("⚠️ 请输入 API Key！"); st.stop()
+    client = Anthropic(api_key=st.session_state.api_key)
     concept_id = concept.split()[0]
-    constraint = CONCEPT_CONSTRAINTS.get(concept_id, "Guide student step-by-step.")
-    system_msg = f"You are a strict AP Calculus tutor. Respond in {st.session_state.curr_lang}.\n\nConstraint for {concept_id}: {constraint}\n1. Use LaTeX for math. 2. NEVER give direct answers. 3. ONE step at a time."
-    return client.messages.create(model=MODEL_NAME, max_tokens=1500, system=system_msg, messages=st.session_state.messages).content[0].text
+    constraint = CONCEPT_CONSTRAINTS.get(concept_id, "Guide step-by-step.")
+    system_msg = f"You are a strict AP Calculus tutor. Respond in {st.session_state.curr_lang}.\n\nConstraint: {constraint}\n1. LaTeX math. 2. No direct answers. 3. Socratic guide."
+    api_messages = list(st.session_state.messages)
+    if extra_content: api_messages.append({"role": "user", "content": extra_content})
+    with st.spinner("⏳ 导师思考中…"):
+        return client.messages.create(model=MODEL_NAME, max_tokens=1500, system=system_msg, messages=api_messages).content[0].text
 
-# ── 对话逻辑与刷新按钮 ──────────────────────────────────
+# ── 5. 图片处理（独立分支修复版） ──────────────────────────────
+with st.expander("📷 上传作业照片 / 拍照"):
+    t1, t2 = st.tabs(["📸 实时拍照", "🖼️ 相册选图"])
+    with t1: cam = st.camera_input("对准题目，点击拍照")
+    with t2: up = st.file_uploader("文件", type=["jpg", "jpeg", "png", "webp"])
+    
+    if cam is not None:
+        st.session_state.pending_image = cam.getvalue()
+        st.session_state.pending_media_type = "image/jpeg"
+        st.success("✅ 照片已暂存")
+    if up is not None:
+        st.session_state.pending_image = up.read()
+        st.session_state.pending_media_type = up.type
+        st.success("✅ 图片已暂存")
+
+    if st.session_state.pending_image:
+        cap = st.text_input("附加说明", placeholder="检查我的解题过程...")
+        if st.button("✅ 确定发送图片"):
+            img_b64 = base64.b64encode(st.session_state.pending_image).decode("utf-8")
+            blocks = [{"type": "image", "source": {"type": "base64", "media_type": st.session_state.pending_media_type, "data": img_b64}}, 
+                      {"type": "text", "text": cap or "请分析我的作业。"} ]
+            reply = get_ai_response(blocks)
+            st.session_state.messages.append({"role": "user", "content": f"[📷 图片] {cap}"})
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            st.session_state.pending_image = st.session_state.pending_media_type = None
+            st.rerun()
+
+# ── 6. 逻辑流 ──────────────────────────────────────────────
+col_r, col_n = st.columns(2)
+if col_r.button("🔄 刷新当前概念"): st.session_state.messages = []; st.rerun()
+if col_n.button("▶️ 下一题"):
+    st.session_state.messages.append({"role": "user", "content": "请出下一题。"})
+    st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
+    st.rerun()
+
 if not st.session_state.messages:
-    init_p = "请针对此概念出第一道题并引导我。" if st.session_state.curr_lang == "Chinese" else "Give me the first problem for this concept."
-    st.session_state.messages.append({"role": "user", "content": init_p})
+    st.session_state.messages.append({"role": "user", "content": "出第一题。"})
     st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
     st.rerun()
-
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]): st.markdown(msg["content"])
-
-if prompt := st.chat_input("Enter response..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
-    st.rerun()
-
-# [新增] 刷新下一题按钮
-btn_label = "▶️ 下一题" if st.session_state.curr_lang == "Chinese" else "▶️ Next Problem"
-next_p = "请继续针对此概念出下一道题。" if st.session_state.curr_lang == "Chinese" else "Give me the next problem for this concept."
-if st.button(btn_label):
-    st.session_state.messages.append({"role": "user", "content": next_p})
+for m in st.session_state.messages:
+    with st.chat_message(m["role"]): st.markdown(m["content"])
+if p := st.chat_input("输入解答或问题…"):
+    st.session_state.messages.append({"role": "user", "content": p})
     st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
     st.rerun()
