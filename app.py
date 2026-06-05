@@ -91,7 +91,8 @@ def get_ai_response(extra_content=None):
 
 # ── 5. MADNESS 压力测试旁路 ─────────────────────────────────
 with st.sidebar.expander("🧪 MADNESS 压力测试"):
-    test_input = st.text_area("输入测试陷阱回答：", height=100)
+    test_input = st.text_input("输入测试陷阱回答：", placeholder="输入一个错误答案来测试导师反应…", key="madness_input")
+    # ✅ 修正：容器内直接调用 st.button 继承侧边栏上下文
     if st.button("⚡ 执行压力测试"):
         if st.session_state.api_key and test_input.strip():
             st.session_state.messages = []
@@ -140,7 +141,15 @@ if not st.session_state.messages:
 for m in st.session_state.messages:
     if not m.get("is_test_probe"):
         with st.chat_message(m["role"]): st.markdown(m["content"])
-if p := st.chat_input("输入解答或问题…"):
-    st.session_state.messages.append({"role": "user", "content": p})
+
+# ── 8. 通用发送输入块 ────────────────────────────────────────
+c_in, c_btn = st.columns([0.85, 0.15])
+with c_in:
+    user_input = st.text_input("输入解答或问题…", key="input_text", label_visibility="collapsed")
+with c_btn:
+    send_btn = st.button("发送")
+
+if send_btn and user_input.strip():
+    st.session_state.messages.append({"role": "user", "content": user_input})
     st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
     st.rerun()
