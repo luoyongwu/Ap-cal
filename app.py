@@ -84,26 +84,32 @@ def get_ai_response(extra_content=None):
     concept_id = concept.split()[0]
     constraint = CONCEPT_CONSTRAINTS.get(concept_id, "Guide step-by-step.")
     system_msg = f"You are a strict AP Calculus tutor. Respond in {st.session_state.curr_lang}.\n\nConstraint: {constraint}\n1. LaTeX math. 2. No direct answers. 3. Socratic guide."
-    api_messages = list(st.session_state.messages)
+    api_messages = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
     if extra_content: api_messages.append({"role": "user", "content": extra_content})
     with st.spinner("⏳ 导师思考中…"):
         return client.messages.create(model=MODEL_NAME, max_tokens=1500, system=system_msg, messages=api_messages).content[0].text
 
-# ── 5. 图片处理（独立分支修复版） ──────────────────────────────
+# ── 5. MADNESS 压力测试旁路 ─────────────────────────────────
+with st.sidebar.expander("🧪 MADNESS 压力测试"):
+    test_input = st.text_area("输入测试陷阱回答：", height=100)
+    if st.button("⚡ 执行压力测试"):
+        if st.session_state.api_key and test_input.strip():
+            st.session_state.messages = []
+            ctx = (f"我们正在练习《{concept}》。学生回答：{test_input}。严格依据约束评估：" 
+                   if st.session_state.curr_lang == "Chinese" 
+                   else f"We are practicing '{concept}'. Student answer: {test_input}. Strictly evaluate per teaching constraints:")
+            st.session_state.messages.append({"role": "user", "content": ctx, "is_test_probe": True})
+            reply = get_ai_response()
+            st.session_state.messages.append({"role": "assistant", "content": reply})
+            st.rerun()
+
+# ── 6. 图片逻辑 ─────────────────────────────────────────────
 with st.expander("📷 上传作业照片 / 拍照"):
     t1, t2 = st.tabs(["📸 实时拍照", "🖼️ 相册选图"])
     with t1: cam = st.camera_input("拍照")
     with t2: up = st.file_uploader("文件", type=["jpg", "jpeg", "png", "webp"])
-    
-    if cam is not None:
-        st.session_state.pending_image = cam.getvalue()
-        st.session_state.pending_media_type = "image/jpeg"
-        st.success("✅ 照片已暂存")
-    if up is not None:
-        st.session_state.pending_image = up.read()
-        st.session_state.pending_media_type = up.type
-        st.success("✅ 图片已暂存")
-
+    if cam is not None: st.session_state.pending_image = cam.getvalue(); st.session_state.pending_media_type = "image/jpeg"; st.success("✅ 照片已暂存")
+    if up is not None: st.session_state.pending_image = up.read(); st.session_state.pending_media_type = up.type; st.success("✅ 图片已暂存")
     if st.session_state.pending_image:
         cap = st.text_input("附加说明", placeholder="检查我的解题过程...")
         if st.button("✅ 确定发送图片"):
@@ -116,7 +122,7 @@ with st.expander("📷 上传作业照片 / 拍照"):
             st.session_state.pending_image = st.session_state.pending_media_type = None
             st.rerun()
 
-# ── 6. 逻辑流 ──────────────────────────────────────────────
+# ── 7. 对话流 ──────────────────────────────────────────────
 col_r, col_n = st.columns(2)
 if col_r.button("🔄 刷新当前概念"): st.session_state.messages = []; st.rerun()
 if col_n.button("▶️ 下一题"):
@@ -126,13 +132,14 @@ if col_n.button("▶️ 下一题"):
 
 if not st.session_state.messages:
     with st.chat_message("assistant"): st.markdown("⏳ 导师正在为您准备第一题…")
-    init_p = "请针对此概念出第一道题并引导我。" if st.session_state.curr_lang == "Chinese" else "Give me the first problem for this concept."
+    init_p = "请针对此概念出第一道题并引导我。" if st.session_state.curr_lang == "Chinese" else "Give me the first problem."
     reply = get_ai_response(extra_content=[{"type": "text", "text": init_p}])
     st.session_state.messages.append({"role": "user", "content": init_p})
     st.session_state.messages.append({"role": "assistant", "content": reply})
     st.rerun()
 for m in st.session_state.messages:
-    with st.chat_message(m["role"]): st.markdown(m["content"])
+    if not m.get("is_test_probe"):
+        with st.chat_message(m["role"]): st.markdown(m["content"])
 if p := st.chat_input("输入解答或问题…"):
     st.session_state.messages.append({"role": "user", "content": p})
     st.session_state.messages.append({"role": "assistant", "content": get_ai_response()})
