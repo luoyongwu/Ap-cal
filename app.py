@@ -2,7 +2,6 @@
 import streamlit as st
 from anthropic import Anthropic
 
-MODEL_NAME = "claude-sonnet-4-20250514"
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
 # 1. 课程矩阵
@@ -14,58 +13,56 @@ UNITS = {
 }
 
 # 2. 状态初始化
-for k, v in {
-    "messages": [], "api_key": "", "key_confirmed": False, "curr_unit": "Unit 1: 极限与连续", 
-    "curr_concept": "1.1 极限简介", "lang": "中文", "status": "未就绪", "is_confirmed": False, "initialized": False
-}.items():
-    if k not in st.session_state: st.session_state[k] = v
+if "status" not in st.session_state: st.session_state.status = "未就绪"
+if "key_ok" not in st.session_state: st.session_state.key_ok = False
+if "config_ok" not in st.session_state: st.session_state.config_ok = False
+if "messages" not in st.session_state: st.session_state.messages = []
 
-# 3. 侧边栏：配置页 (含 Key 确认逻辑)
+# 3. 侧边栏：配置页 (完整还原)
 with st.sidebar:
     st.title("⚙️ 配置页")
-    # API Key 输入与确认
-    temp_key = st.text_input("🔑 Claude API Key", type="password")
+    # API Key 确认
+    api_key_input = st.text_input("🔑 Claude API Key", type="password")
     if st.button("✅ 确认 Key"):
-        if temp_key:
-            st.session_state.api_key = temp_key
-            st.session_state.key_confirmed = True
-            st.success("API Key 已锁定")
-        else:
-            st.error("请输入有效的 Key")
-            
-    st.divider()
-    st.session_state.lang = st.radio("语言切换", ["中文", "English"])
-    new_unit = st.selectbox("选择 Unit", list(UNITS.keys()))
-    new_concept = st.selectbox("选择 Concept", UNITS[new_unit])
+        if api_key_input:
+            st.session_state.api_key = api_key_input
+            st.session_state.key_ok = True
+            st.success("Key 已锁定")
+        else: st.error("Key 不能为空")
     
+    st.divider()
+    # 课程配置
+    lang = st.radio("语言切换", ["中文", "English"])
+    unit = st.selectbox("选择 Unit", list(UNITS.keys()))
+    concept = st.selectbox("选择 Concept", UNITS[unit])
     if st.button("✅ 确认配置"):
-        st.session_state.curr_unit = new_unit
-        st.session_state.curr_concept = new_concept
-        st.session_state.is_confirmed = True
-        st.session_state.status = "就绪"
-        st.rerun()
+        st.session_state.curr_concept = concept
+        st.session_state.config_ok = True
+        st.success(f"已锁定: {concept}")
 
-# 4. 主界面：红绿状态显示
-st.title(f"🎓 Luo-cal: {st.session_state.curr_concept}")
-# 逻辑：Key+配置均确认后，系统状态显示为绿色
-if st.session_state.key_confirmed and st.session_state.is_confirmed:
-    st.success(f"系统状态: {st.session_state.status} (系统已就绪)")
+# 4. 主界面：状态显示
+st.title(f"🎓 Luo-cal: {st.session_state.get('curr_concept', '待配置')}")
+
+# 状态反馈逻辑：由红转绿
+if st.session_state.key_ok and st.session_state.config_ok:
+    st.success("系统状态: 就绪 (配置已完成)")
+    st.session_state.status = "就绪"
 else:
-    st.error("系统状态: 未就绪 (请先完成 Key 确认及配置确认)")
-    st.stop()
+    st.error("系统状态: 未就绪 (需完成 Key 与配置确认)")
+    st.session_state.status = "未就绪"
 
-# 5. 隐性第一问
-if not st.session_state.initialized:
-    st.session_state.messages = [{"role": "assistant", "content": "导师: 请问您对本概念的直觉理解是什么？"}]
-    st.session_state.initialized = True
-
-# 6. 测试输入与反馈
+# 5. 测试交互区
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
 if prompt := st.chat_input("输入测试题..."):
-    st.session_state.status = "正在工作，稍后..." # 显示正在工作
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    st.session_state.messages.append({"role": "assistant", "content": "导师反馈..."})
-    st.session_state.status = "就绪"
-    st.rerun()
+    if not (st.session_state.key_ok and st.session_state.config_ok):
+        st.warning("请先在配置页完成所有确认！")
+    else:
+        st.session_state.status = "正在工作，稍后..."
+        st.info(st.session_state.status)
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        # 此处模拟响应
+        st.session_state.messages.append({"role": "assistant", "content": "导师反馈..."})
+        st.session_state.status = "就绪"
+        st.rerun()
