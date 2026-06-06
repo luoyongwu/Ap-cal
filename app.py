@@ -13,26 +13,22 @@ UNITS = {
 }
 
 # 2. 状态初始化
-if "status" not in st.session_state: st.session_state.status = "未就绪"
 if "key_ok" not in st.session_state: st.session_state.key_ok = False
 if "config_ok" not in st.session_state: st.session_state.config_ok = False
 if "messages" not in st.session_state: st.session_state.messages = []
+if "status" not in st.session_state: st.session_state.status = "未就绪"
 
-# 3. 侧边栏：配置页 (完整还原)
+# 3. 侧边栏：配置页 (锁死配置)
 with st.sidebar:
     st.title("⚙️ 配置页")
-    # API Key 确认
     api_key_input = st.text_input("🔑 Claude API Key", type="password")
     if st.button("✅ 确认 Key"):
-        if api_key_input:
-            st.session_state.api_key = api_key_input
+        if api_key_input: 
             st.session_state.key_ok = True
             st.success("Key 已锁定")
         else: st.error("Key 不能为空")
     
     st.divider()
-    # 课程配置
-    lang = st.radio("语言切换", ["中文", "English"])
     unit = st.selectbox("选择 Unit", list(UNITS.keys()))
     concept = st.selectbox("选择 Concept", UNITS[unit])
     if st.button("✅ 确认配置"):
@@ -40,10 +36,8 @@ with st.sidebar:
         st.session_state.config_ok = True
         st.success(f"已锁定: {concept}")
 
-# 4. 主界面：状态显示
+# 4. 主界面：红绿状态显示
 st.title(f"🎓 Luo-cal: {st.session_state.get('curr_concept', '待配置')}")
-
-# 状态反馈逻辑：由红转绿
 if st.session_state.key_ok and st.session_state.config_ok:
     st.success("系统状态: 就绪 (配置已完成)")
     st.session_state.status = "就绪"
@@ -52,17 +46,18 @@ else:
     st.session_state.status = "未就绪"
 
 # 5. 测试交互区
+st.subheader("📝 测试与交互")
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
 if prompt := st.chat_input("输入测试题..."):
     if not (st.session_state.key_ok and st.session_state.config_ok):
-        st.warning("请先在配置页完成所有确认！")
+        st.warning("请先完成配置确认！")
     else:
         st.session_state.status = "正在工作，稍后..."
         st.info(st.session_state.status)
         st.session_state.messages.append({"role": "user", "content": prompt})
-        # 此处模拟响应
-        st.session_state.messages.append({"role": "assistant", "content": "导师反馈..."})
+        # 模拟交互
+        st.session_state.messages.append({"role": "assistant", "content": "导师反馈: [STATUS: GUIDING]"})
         st.session_state.status = "就绪"
         st.rerun()
