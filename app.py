@@ -2,61 +2,80 @@
 import streamlit as st
 from anthropic import Anthropic
 
+MODEL_NAME = "claude-sonnet-4-20250514"
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
-# 1. 课程矩阵
-UNITS = {
-    "Unit 1: 极限与连续": ["1.1 极限简介", "1.2 极限计算", "1.3 连续性", "1.4 渐近线"],
-    "Unit 2: 导数定义": ["2.1 导数定义", "2.2 可导与连续", "2.3 导数图像", "2.4 高阶导数"],
-    "Unit 3: 求导法则": ["3.1 链式法则", "3.2 隐函数求导", "3.3 反函数求导", "3.4 参数方程求导"],
-    "Unit 4: 导数应用": ["4.1 极值定理", "4.2 中值定理", "4.3 相关变化率", "4.4 线性近似"]
+st.session_state.api_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+if not st.session_state.api_key:
+    st.error("请在 Streamlit Cloud Secrets 中配置 ANTHROPIC_API_KEY")
+    st.stop()
+
+CONCEPT_OPTIONS = {"1.1 极限简介": "1.1", "3.1 链式法则": "3.1", "3.2 隐函数求导": "3.2", "3.4 反函数求导": "3.4"}
+CONCEPT_CONSTRAINTS = {
+    "1.1": "Ensure student builds intuition numerically/graphically before algebra.",
+    "3.1": "HARD RULE: Decompose f(g(x)) into f(u) and g(x) explicitly. If absent, redirect.",
+    "3.2": "Focus on implicit differentiation notation. If dy/dx is missing, redirect.",
+    "3.4": "Verify inverse function domain constraints. If domain logic is skipped, redirect."
 }
 
-# 2. 状态初始化
-if "messages" not in st.session_state: st.session_state.messages = []
-if "key_ok" not in st.session_state: st.session_state.key_ok = False
-if "config_ok" not in st.session_state: st.session_state.config_ok = False
-if "status" not in st.session_state: st.session_state.status = "未就绪"
+for k, v in {
+    "messages": [], "curr_concept": "3.1 链式法则",
+    "mastery_scores": {}, "mastery_ready": False, "last_summary": "",
+}.items():
+    if k not in st.session_state: st.session_state[k] = v
 
-# 3. 侧边栏：配置页 (锁死配置)
-with st.sidebar:
-    st.title("⚙️ 配置页")
-    api_key_input = st.text_input("🔑 Claude API Key", type="password")
-    if st.button("✅ 确认 Key"):
-        if api_key_input: 
-            st.session_state.key_ok = True
-            st.success("Key 已锁定")
-        else: st.error("Key 不能为空")
-    
-    st.divider()
-    st.session_state.lang = st.radio("语言切换", ["中文", "English"])
-    unit = st.selectbox("选择 Unit", list(UNITS.keys()))
-    concept = st.selectbox("选择 Concept", UNITS[unit])
-    if st.button("✅ 确认配置"):
-        st.session_state.curr_concept = concept
-        st.session_state.config_ok = True
-        st.success(f"已锁定: {concept}")
+def update_mastery(concept_id, response_text):
+    scores = st.session_state.mastery_scores
+    if concept_id not in scores: scores[concept_id] = 0
+    if "[STATUS: CORRECT]" in response_text: scores[concept_id] += 1
+    elif "[STATUS: INCORRECT]" in response_text or "[STATUS: PARTIAL]" in response_text: scores[concept_id] = 0
+    if scores[concept_id] >= 3: st.session_state.mastery_ready = True
 
-# 4. 主界面：红绿状态显示
-st.title(f"🎓 Luo-cal: {st.session_state.get('curr_concept', '待配置')}")
-if st.session_state.key_ok and st.session_state.config_ok:
-    st.success("系统状态: 就绪")
-    st.session_state.status = "就绪"
-else:
-    st.error("系统状态: 未就绪 (需完成 Key 与配置确认)")
-    st.session_state.status = "未就绪"
+def generate_summary(concept_id):
+    client = Anthropic(api_key=st.session_state.api_key)
+    digest = "\n".join(f"{m['role'].upper()}: {m['content'][:200]}" for m in st.session_state.messages[-8:])
+    prompt = f"Based on this tutoring for {concept_id}:\n{digest}\nGenerate a structured summary in Chinese:\n1. 核心法则: [公式]\n2. 关键步骤: 1. ...\n3. ⚠️ 陷阱提示: [学生错误]"
+    return client.messages.create(model=MODEL_NAME, max_tokens=600, messages=[{"role": "user", "content": prompt}]).content[0].text
 
-# 5. 测试交互区
-st.divider()
-st.subheader("📝 测试与交互")
+def get_ai_response(extra_content=None):
+    client = Anthropic(api_key=st.session_state.api_key)
+    concept_id = CONCEPT_OPTIONS[st.session_state.curr_concept]
+    system_msg = f"Strict AP Calculus tutor. {CONCEPT_CONSTRAINTS.get(concept_id, '')} \nRESPONSE FORMAT: Append one tag: [STATUS: CORRECT], [STATUS: PARTIAL], [STATUS: INCORRECT], [STATUS: GUIDING]."
+    msgs = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
+    if extra_content: msgs.append({"role": "user", "content": extra_content})
+    with st.spinner("⏳ 导师思考中…"):
+        response = client.messages.create(model=MODEL_NAME, max_tokens=1500, system=system_msg, messages=msgs)
+        reply = response.content[0].text
+        update_mastery(concept_id, reply)
+        return reply.replace("[STATUS: CORRECT]", "").replace("[STATUS: PARTIAL]", "").replace("[STATUS: INCORRECT]", "").replace("[STATUS: GUIDING]", "").rstrip()
+
+st.sidebar.title("🎓 Luo-cal 控制台")
+st.session_state.curr_concept = st.sidebar.selectbox("选择概念", list(CONCEPT_OPTIONS.keys()))
+
+if not st.session_state.messages:
+    opening = get_ai_response(f"请为概念 {st.session_state.curr_concept} 出一道练习题。")
+    st.session_state.messages.append({"role": "assistant", "content": opening})
+    st.rerun()
+
+if st.button("🔄 刷新概念"):
+    st.session_state.messages = []; st.session_state.last_summary = ""
+    st.session_state.mastery_ready = False; st.session_state.mastery_scores = {}
+    st.rerun()
+
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
-if prompt := st.chat_input("输入测试题..."):
-    st.session_state.status = "正在工作，稍后..."
-    st.info(st.session_state.status)
+if prompt := st.chat_input("输入回答..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
-    # 模拟交互
-    st.session_state.messages.append({"role": "assistant", "content": f"导师反馈 (Lang:{st.session_state.lang}): [STATUS: GUIDING]"})
-    st.session_state.status = "就绪"
+    response = get_ai_response()
+    st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun()
+
+if st.session_state.mastery_ready:
+    if st.button("💡 生成深度总结"):
+        st.session_state.last_summary = generate_summary(CONCEPT_OPTIONS[st.session_state.curr_concept])
+        st.session_state.mastery_ready = False
+        st.rerun()
+
+if st.session_state.last_summary:
+    with st.expander("🎓 知识点总结", expanded=True): st.markdown(st.session_state.last_summary)
