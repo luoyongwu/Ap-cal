@@ -5,6 +5,7 @@ import base64
 MODEL_NAME = "claude-sonnet-4-6"
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
+# 概念矩阵 (包含 Unit 1-4)
 UNITS = {
    "Unit 1: 极限与连续": {
        "1.1 极限简介": "1.1", "1.2 极限计算": "1.2",
@@ -24,14 +25,7 @@ UNITS = {
    },
 }
 
-CONCEPT_CONSTRAINTS = {
-   "1.1": "Ensure student builds intuition numerically/graphically before algebra.",
-   "1.2": "Guide student to apply limit laws step by step.",
-   "2.1": "Guide student to derive derivative from limit definition. Do not skip.",
-   "3.1": "HARD RULE: Decompose f(g(x)) into f(u) and g(x) explicitly.",
-   "4.3": "Ensure student identifies all related variables and sets up equation first.",
-}
-
+# 辅助配置初始化
 for k, v in {
    "messages": [], "api_key": "", "key_confirmed": False,
    "curr_unit": "Unit 1: 极限与连续", "curr_concept": "1.1 极限简介",
@@ -57,18 +51,13 @@ with st.sidebar:
 
 def get_ai_response(extra_content=None):
    client = Anthropic(api_key=st.session_state.api_key)
-   concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
-   system_msg = f"Strict AP Calculus Socratic tutor. {CONCEPT_CONSTRAINTS.get(concept_id, 'Guide step by step.')} RESPONSE FORMAT: Append tag [STATUS: CORRECT/INCORRECT/GUIDING]."
    msgs = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages if isinstance(m.get("content"), (str, list))]
    if extra_content: msgs.append({"role": "user", "content": extra_content})
-   
    with st.spinner("⏳ 导师思考中…"):
-       reply = client.messages.create(model=MODEL_NAME, max_tokens=1500, system=system_msg, messages=msgs).content[0].text
-       # 自动更新掌握度逻辑此处省略，保持核心简洁
-       return reply
+       return client.messages.create(model=MODEL_NAME, max_tokens=1500, messages=msgs).content[0].text
 
 if not st.session_state.messages and st.session_state.key_confirmed:
-   st.session_state.messages.append({"role": "assistant", "content": get_ai_response(f"请针对 {st.session_state.curr_concept} 出题。")})
+   st.session_state.messages.append({"role": "assistant", "content": get_ai_response(f"请针对 {st.session_state.curr_concept} 出一道题。")})
    st.rerun()
 
 for m in st.session_state.messages:
