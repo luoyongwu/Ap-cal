@@ -43,7 +43,7 @@ CONCEPT_CONSTRAINTS = {
    "2.X": "Generate a comprehensive problem combining limit definition of derivative, differentiability, and graphical interpretation.",
    "3.1": "HARD RULE: Decompose f(g(x)) into f(u) and g(x) explicitly before differentiating. If student skips decomposition, redirect immediately.",
    "3.2": "HARD RULE: Ensure dy/dx appears explicitly when differentiating y terms. If missing, redirect.",
-   "3.3": "HARD RULE: For products, require student to identify u and v explicitly before applying (uv)'=u'v+uv'. For quotients, require student to identify numerator and denominator before applying the quotient rule. Do not allow skipping identification step.",
+   "3.3": "HARD RULE: For products, require student to identify u and v explicitly before applying (uv)'=u'v+uv'. For quotients, require student to identify numerator and denominator before applying the quotient rule.",
    "3.4": "Verify student correctly applies the inverse function derivative formula. Check that f'(f⁻¹(x)) is evaluated at the correct point.",
    "3.5": "HARD RULE: Require student to write dx/dt and dy/dt separately before computing dy/dx=(dy/dt)/(dx/dt). Do not allow direct substitution without showing both derivatives.",
    "3.X": "Generate a comprehensive problem combining chain rule, implicit differentiation, product/quotient rules, inverse function derivatives, and parametric derivatives.",
@@ -58,6 +58,10 @@ OPENING_PROMPTS = {
    "2.X": "请出一道Unit 2综合题，综合考查导数定义、可导与连续、导数图像，包含至少两个子问题。",
    "3.X": "请出一道Unit 3综合题，综合考查链式法则、隐函数求导、乘积与商法则、反函数求导和参数方程求导，包含至少两个子问题。",
    "4.X": "请出一道Unit 4综合题，综合考查极值定理、中值定理和相关变化率，包含至少两个子问题。",
+   "1.X_en": "Generate a comprehensive Unit 1 problem covering limits, continuity, and asymptotes. Include at least two sub-questions.",
+   "2.X_en": "Generate a comprehensive Unit 2 problem covering limit definition of derivative, differentiability, and graphical interpretation. Include at least two sub-questions.",
+   "3.X_en": "Generate a comprehensive Unit 3 problem covering chain rule, implicit differentiation, product/quotient rules, inverse function derivatives, and parametric derivatives. Include at least two sub-questions.",
+   "4.X_en": "Generate a comprehensive Unit 4 problem covering optimization, MVT, and related rates. Include at least two sub-questions.",
 }
 
 LANG_LABELS = {
@@ -74,8 +78,8 @@ LANG_LABELS = {
        "disconnected": "🔴 未连接",
        "connected_color": "#1a7a1a",
        "disconnected_color": "#cc0000",
+       "lang_btn": "切换为 English 🌐",
        "show_test": "🔧 显示测试面板",
-       "lang_switch": "🌐 切换语言 / Switch Language",
        "wait": "请在左侧配置页输入 API Key 并点击确认。",
        "refresh": "🔄 刷新当前概念",
        "upload": "📷 上传手写题目（拍照或选图）",
@@ -97,6 +101,9 @@ LANG_LABELS = {
        "test_working": "⏳ 系统正在工作，请稍后……",
        "test_empty": "请先输入内容。",
        "spinner": "⏳ 导师思考中…",
+       "opening_default": "请为概念 {concept} 出一道练习题，不要直接给出解题步骤，先只问第一个引导性问题。",
+       "lang_instr": "Respond in Chinese.",
+       "summary_lang": "in Chinese",
    },
    "English": {
        "title_prefix": "🎓 Luo-cal",
@@ -111,8 +118,8 @@ LANG_LABELS = {
        "disconnected": "🔴 Disconnected",
        "connected_color": "#1a7a1a",
        "disconnected_color": "#cc0000",
+       "lang_btn": "切换为中文 🌐",
        "show_test": "🔧 Show Test Panel",
-       "lang_switch": "🌐 切换语言 / Switch Language",
        "wait": "Please enter your API Key in the sidebar and confirm.",
        "refresh": "🔄 Refresh Concept",
        "upload": "📷 Upload Handwritten Work (Camera or Gallery)",
@@ -134,9 +141,13 @@ LANG_LABELS = {
        "test_working": "⏳ System working, please wait……",
        "test_empty": "Please enter content first.",
        "spinner": "⏳ Tutor thinking…",
+       "opening_default": "Generate one practice problem for {concept}. Do not give steps. Ask only the first guiding question.",
+       "lang_instr": "Respond in English.",
+       "summary_lang": "in English",
    }
 }
 
+# ── 状态初始化 ────────────────────────────────────────────
 for k, v in {
    "messages": [], "api_key": "", "key_confirmed": False,
    "curr_unit": "Unit 1: 极限与连续", "curr_concept": "1.1 极限简介",
@@ -151,14 +162,14 @@ L = LANG_LABELS[st.session_state.lang]
 with st.sidebar:
    st.title(L["config"])
 
-   lang_choice = st.radio(L["lang_switch"], ["Chinese", "English"],
-                           index=0 if st.session_state.lang == "Chinese" else 1,
-                           horizontal=True)
-   if lang_choice != st.session_state.lang:
-       st.session_state.lang = lang_choice
+   # 语言切换（button 方式，稳定可靠）
+   if st.button(L["lang_btn"], use_container_width=True):
+       st.session_state.lang = "English" if st.session_state.lang == "Chinese" else "Chinese"
        st.rerun()
 
    st.divider()
+
+   # API Key
    key_input = st.text_input(L["api_key"], type="password",
                               value=st.session_state.api_key)
    if st.button(L["confirm_key"]):
@@ -170,6 +181,8 @@ with st.sidebar:
            st.error(L["key_err"])
 
    st.divider()
+
+   # Unit / Concept 两级选择
    selected_unit = st.selectbox(
        L["select_unit"], list(UNITS.keys()),
        index=list(UNITS.keys()).index(st.session_state.curr_unit))
@@ -186,6 +199,7 @@ with st.sidebar:
        st.rerun()
 
    st.divider()
+
    # 醒目状态显示
    status_color = L["connected_color"] if st.session_state.key_confirmed else L["disconnected_color"]
    status_text = L["connected"] if st.session_state.key_confirmed else L["disconnected"]
@@ -217,9 +231,9 @@ def generate_summary(concept_id):
        for m in st.session_state.messages[-8:]
        if isinstance(m.get("content"), str)
    )
-   lang_instr = "in Chinese" if st.session_state.lang == "Chinese" else "in English"
+   L_local = LANG_LABELS[st.session_state.lang]
    prompt = (f"Based on this tutoring session for concept {concept_id}:\n{digest}\n"
-             f"Generate a structured summary {lang_instr}:\n"
+             f"Generate a structured summary {L_local['summary_lang']}:\n"
              f"1. 核心法则 / Core Rule: [公式 / formula]\n"
              f"2. 关键步骤 / Key Steps: 1. [步骤] 2. [步骤] ...\n"
              f"3. ⚠️ 陷阱提示 / Pitfall: [本次学生实际犯的错误，一句话]")
@@ -231,9 +245,9 @@ def generate_summary(concept_id):
 def get_ai_response(extra_content=None):
    client = Anthropic(api_key=st.session_state.api_key)
    concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
-   lang_instr = "Respond in Chinese." if st.session_state.lang == "Chinese" else "Respond in English."
+   L_local = LANG_LABELS[st.session_state.lang]
    system_msg = (
-       f"You are a strict AP Calculus Socratic tutor. {lang_instr} "
+       f"You are a strict AP Calculus Socratic tutor. {L_local['lang_instr']} "
        f"NEVER give the answer directly. Always guide with questions. "
        f"TEACHING CONSTRAINT: {CONCEPT_CONSTRAINTS.get(concept_id, 'Guide step by step.')} "
        f"\nRESPONSE FORMAT RULE: You MUST append exactly one of these tags "
@@ -246,7 +260,6 @@ def get_ai_response(extra_content=None):
            if isinstance(m.get("content"), (str, list))]
    if extra_content:
        msgs.append({"role": "user", "content": extra_content})
-   L_local = LANG_LABELS[st.session_state.lang]
    with st.spinner(L_local["spinner"]):
        response = client.messages.create(
            model=MODEL_NAME, max_tokens=1500,
@@ -286,14 +299,17 @@ if show_test:
 # 初始出题
 if not st.session_state.messages:
    concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
-   opening = OPENING_PROMPTS.get(
-       concept_id,
-       (f"请为概念 {st.session_state.curr_concept} 出一道练习题，"
-        f"不要直接给出解题步骤，先只问第一个引导性问题。")
-       if st.session_state.lang == "Chinese" else
-       (f"Generate one practice problem for {st.session_state.curr_concept}. "
-        f"Do not give steps. Ask only the first guiding question.")
-   )
+   key_en = concept_id + "_en"
+   if st.session_state.lang == "Chinese":
+       opening = OPENING_PROMPTS.get(
+           concept_id,
+           L["opening_default"].format(concept=st.session_state.curr_concept)
+       )
+   else:
+       opening = OPENING_PROMPTS.get(
+           key_en,
+           L["opening_default"].format(concept=st.session_state.curr_concept)
+       )
    first = get_ai_response(opening)
    st.session_state.messages.append({"role": "assistant", "content": first})
    st.rerun()
