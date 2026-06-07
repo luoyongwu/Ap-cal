@@ -69,6 +69,9 @@ with st.sidebar:
     st.divider()
     if st.session_state.key_confirmed: st.success("🟢 系统已连接")
     else: st.error("🔴 未连接")
+    
+    st.divider()
+    show_test = st.checkbox("🔧 显示测试面板", value=False)
 
 # ── 核心函数 ──────────────────────────────────────────────
 def update_mastery(concept_id, response_text):
@@ -110,6 +113,10 @@ if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": opening})
     st.rerun()
 
+if st.button("🔄 刷新当前概念"):
+    st.session_state.messages = []; st.session_state.last_summary = ""; st.session_state.mastery_ready = False; st.session_state.mastery_scores = {}
+    st.rerun()
+
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         if isinstance(m["content"], str): st.markdown(m["content"])
@@ -124,7 +131,7 @@ with st.expander("📷 上传手写题目（拍照或选图）"):
     uploaded = col2.file_uploader("🖼️ 选图", type=["jpg","png"], accept_multiple_files=True)
     pending = [("image/jpeg", photo.read())] if photo else []
     for f in uploaded: pending.append(("image/png" if f.name.endswith(".png") else "image/jpeg", f.read()))
-    if pending and st.button("✅ 确认发送"):
+    if pending and st.button("✅ 确认发送图片"):
         content = [{"type": "image", "source": {"type": "base64", "media_type": m, "data": base64.b64encode(d).decode()}} for m, d in pending]
         content.append({"type": "text", "text": "请分析图中的手写内容，按苏格拉底方式引导。"})
         st.session_state.messages.append({"role": "user", "content": content})
@@ -143,3 +150,16 @@ if st.session_state.mastery_ready and st.button("💡 生成深度总结"):
     st.session_state.mastery_ready = False
     st.rerun()
 if st.session_state.last_summary: st.expander("🎓 知识点总结", expanded=True).markdown(st.session_state.last_summary)
+
+if show_test:
+    st.divider()
+    st.subheader("🔧 测试面板")
+    test_input = st.text_area("测试输入", height=100)
+    if st.button("✅ 确认发送测试"):
+        if test_input.strip():
+            st.session_state.messages.append({"role": "user", "content": test_input})
+            with st.status("⏳ 系统正在工作，请稍后……", expanded=True):
+                response = get_ai_response()
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            st.rerun()
+        else: st.warning("请先输入内容")
