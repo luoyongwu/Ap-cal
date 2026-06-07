@@ -13,9 +13,9 @@ UNITS = {
 }
 
 # 2. 状态初始化
+if "messages" not in st.session_state: st.session_state.messages = []
 if "key_ok" not in st.session_state: st.session_state.key_ok = False
 if "config_ok" not in st.session_state: st.session_state.config_ok = False
-if "messages" not in st.session_state: st.session_state.messages = []
 if "status" not in st.session_state: st.session_state.status = "未就绪"
 
 # 3. 侧边栏：配置页 (锁死配置)
@@ -29,6 +29,7 @@ with st.sidebar:
         else: st.error("Key 不能为空")
     
     st.divider()
+    st.session_state.lang = st.radio("语言切换", ["中文", "English"])
     unit = st.selectbox("选择 Unit", list(UNITS.keys()))
     concept = st.selectbox("选择 Concept", UNITS[unit])
     if st.button("✅ 确认配置"):
@@ -39,25 +40,23 @@ with st.sidebar:
 # 4. 主界面：红绿状态显示
 st.title(f"🎓 Luo-cal: {st.session_state.get('curr_concept', '待配置')}")
 if st.session_state.key_ok and st.session_state.config_ok:
-    st.success("系统状态: 就绪 (配置已完成)")
+    st.success("系统状态: 就绪")
     st.session_state.status = "就绪"
 else:
     st.error("系统状态: 未就绪 (需完成 Key 与配置确认)")
     st.session_state.status = "未就绪"
 
 # 5. 测试交互区
+st.divider()
 st.subheader("📝 测试与交互")
 for m in st.session_state.messages:
     with st.chat_message(m["role"]): st.markdown(m["content"])
 
 if prompt := st.chat_input("输入测试题..."):
-    if not (st.session_state.key_ok and st.session_state.config_ok):
-        st.warning("请先完成配置确认！")
-    else:
-        st.session_state.status = "正在工作，稍后..."
-        st.info(st.session_state.status)
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        # 模拟交互
-        st.session_state.messages.append({"role": "assistant", "content": "导师反馈: [STATUS: GUIDING]"})
-        st.session_state.status = "就绪"
-        st.rerun()
+    st.session_state.status = "正在工作，稍后..."
+    st.info(st.session_state.status)
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    # 模拟交互
+    st.session_state.messages.append({"role": "assistant", "content": f"导师反馈 (Lang:{st.session_state.lang}): [STATUS: GUIDING]"})
+    st.session_state.status = "就绪"
+    st.rerun()
