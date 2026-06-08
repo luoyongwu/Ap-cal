@@ -104,6 +104,7 @@ LANG_LABELS = {
        "opening_default": "请为概念 {concept} 出一道练习题，不要直接给出解题步骤，先只问第一个引导性问题。",
        "lang_instr": "Respond in Chinese.",
        "summary_lang": "in Chinese",
+       "secrets_notice": "🔑 已从系统配置自动加载 API Key",
    },
    "English": {
        "title_prefix": "🎓 Luo-cal",
@@ -144,6 +145,7 @@ LANG_LABELS = {
        "opening_default": "Generate one practice problem for {concept}. Do not give steps. Ask only the first guiding question.",
        "lang_instr": "Respond in English.",
        "summary_lang": "in English",
+       "secrets_notice": "🔑 API Key loaded from system configuration",
    }
 }
 
@@ -156,29 +158,43 @@ for k, v in {
 }.items():
    if k not in st.session_state: st.session_state[k] = v
 
+# ── 方案A+B：自动加载 Key ─────────────────────────────────
+# 优先级1：Streamlit Cloud Secrets（教师部署，最稳定）
+# 优先级2：已在本次 session 输入过的 Key
+# 优先级3：要求用户手动输入
+if not st.session_state.key_confirmed:
+   secrets_key = st.secrets.get("ANTHROPIC_API_KEY", "")
+   if secrets_key:
+       st.session_state.api_key = secrets_key
+       st.session_state.key_confirmed = True
+
 L = LANG_LABELS[st.session_state.lang]
 
 # ── 侧边栏 ────────────────────────────────────────────────
 with st.sidebar:
    st.title(L["config"])
 
-   # 语言切换（button 方式，稳定可靠）
+   # 语言切换
    if st.button(L["lang_btn"], use_container_width=True):
        st.session_state.lang = "English" if st.session_state.lang == "Chinese" else "Chinese"
        st.rerun()
 
    st.divider()
 
-   # API Key
-   key_input = st.text_input(L["api_key"], type="password",
-                              value=st.session_state.api_key)
-   if st.button(L["confirm_key"]):
-       if key_input.startswith("sk-"):
-           st.session_state.api_key = key_input
-           st.session_state.key_confirmed = True
-           st.success(L["key_ok"])
-       else:
-           st.error(L["key_err"])
+   # API Key 区域
+   # 如果已从 Secrets 自动加载，显示提示而非输入框
+   if st.session_state.key_confirmed and st.secrets.get("ANTHROPIC_API_KEY", ""):
+       st.info(L["secrets_notice"])
+   else:
+       key_input = st.text_input(L["api_key"], type="password",
+                                  value=st.session_state.api_key)
+       if st.button(L["confirm_key"]):
+           if key_input.startswith("sk-"):
+               st.session_state.api_key = key_input
+               st.session_state.key_confirmed = True
+               st.success(L["key_ok"])
+           else:
+               st.error(L["key_err"])
 
    st.divider()
 
