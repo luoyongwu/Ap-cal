@@ -3,8 +3,68 @@ import streamlit as st
 from anthropic import Anthropic
 import base64
 
-MODEL_NAME = "claude-sonnet-4-20250514"
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
+
+# ══════════════════════════════════════════════════════
+# 后端适配器层
+# 统一接口：adapter.chat(system, messages, max_tokens)
+# 切换后端只需改 session_state.backend，教学逻辑零改动
+# ══════════════════════════════════════════════════════
+
+class AnthropicAdapter:
+    MODEL = "claude-sonnet-4-20250514"
+    def __init__(self, api_key):
+        self.client = Anthropic(api_key=api_key)
+    def chat(self, system, messages, max_tokens=1500):
+        r = self.client.messages.create(
+            model=self.MODEL, system=system,
+            messages=messages, max_tokens=max_tokens)
+        return r.content[0].text
+
+class DeepSeekAdapter:
+    MODEL = "deepseek-chat"
+    def __init__(self, api_key):
+        from openai import OpenAI
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com")
+    def chat(self, system, messages, max_tokens=1500):
+        msgs = [{"role": "system", "content": system}] + messages
+        r = self.client.chat.completions.create(
+            model=self.MODEL, messages=msgs, max_tokens=max_tokens)
+        return r.choices[0].message.content
+
+class OllamaAdapter:
+    def __init__(self, model="gemma3"):
+        self.model = model
+        self.url = "http://localhost:11434/api/chat"
+    def chat(self, system, messages, max_tokens=1500):
+        import json
+        msgs = [{"role": "system", "content": system}] + messages
+        r = __import__("requests").post(
+            self.url,
+            json={"model": self.model, "messages": msgs, "stream": False})
+        return r.json()["message"]["content"]
+
+BACKENDS = {
+    "Anthropic (Claude)": "anthropic",
+    "DeepSeek":           "deepseek",
+    "本地 Ollama (Gemma)": "ollama",
+}
+
+def get_adapter():
+    b = st.session_state.backend
+    k = st.session_state.api_key
+    if b == "anthropic":
+        return AnthropicAdapter(k)
+    elif b == "deepseek":
+        return DeepSeekAdapter(k)
+    else:
+        return OllamaAdapter()
+
+# ══════════════════════════════════════════════════════
+# 教学数据（不随后端变化）
+# ══════════════════════════════════════════════════════
 
 UNITS = {
     "Unit 1: 极限与连续": {
@@ -68,12 +128,13 @@ LANG_LABELS = {
     "Chinese": {
         "title_prefix": "🎓 Luo-cal",
         "config": "⚙️ 配置页",
-        "api_key": "🔑 Claude API Key",
+        "api_key": "🔑 API Key",
         "confirm_key": "✅ 确认 Key",
         "key_ok": "Key 已锁定",
-        "key_err": "Key 格式错误",
+        "key_err": "Key 格式错误（需以 sk- 开头）",
         "select_unit": "选择 Unit",
         "select_concept": "选择 Concept",
+        "select_backend": "🔌 选择后端",
         "connected": "🟢 系统已连接",
         "disconnected": "🔴 未连接",
         "connected_color": "#1a7a1a",
@@ -105,16 +166,18 @@ LANG_LABELS = {
         "lang_instr": "Respond in Chinese.",
         "summary_lang": "in Chinese",
         "secrets_notice": "🔑 已从系统配置自动加载 API Key",
+        "ollama_notice": "🖥️ 本地 Ollama 模式，无需 API Key",
     },
     "English": {
         "title_prefix": "🎓 Luo-cal",
         "config": "⚙️ Settings",
-        "api_key": "🔑 Claude API Key",
+        "api_key": "🔑 API Key",
         "confirm_key": "✅ Confirm Key",
         "key_ok": "Key locked",
-        "key_err": "Invalid key format",
+        "key_err": "Invalid key format (must start with sk-)",
         "select_unit": "Select Unit",
         "select_concept": "Select Concept",
+        "select_backend": "🔌 Select Backend",
         "connected": "🟢 Connected",
         "disconnected": "🔴 Disconnected",
         "connected_color": "#1a7a1a",
@@ -146,12 +209,14 @@ LANG_LABELS = {
         "lang_instr": "Respond in English.",
         "summary_lang": "in English",
         "secrets_notice": "🔑 API Key loaded from system configuration",
+        "ollama_notice": "🖥️ Local Ollama mode, no API Key needed",
     }
 }
 
 # ── 状态初始化 ────────────────────────────────────────────
 for k, v in {
     "messages": [], "api_key": "", "key_confirmed": False,
+    "backend": "anthropic",
     "curr_unit": "Unit 1: 极限与连续", "curr_concept": "1.1 极限简介",
     "mastery_scores": {}, "mastery_ready": False, "last_summary": "",
     "lang": "Chinese",
@@ -159,9 +224,7 @@ for k, v in {
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── FIX: 正确读取 Secrets，用 try/except 而非 .get() ──────
-# 原来的 st.secrets.get() 在 Streamlit Cloud 上不稳定
-# 现在改为标准字典访问 + try/except，确保每次启动只判断一次
+# ── 自动加载 Secrets（FIX: try/except 而非 .get()）────────
 if not st.session_state.key_confirmed:
     try:
         secrets_key = st.secrets["ANTHROPIC_API_KEY"]
@@ -169,7 +232,7 @@ if not st.session_state.key_confirmed:
             st.session_state.api_key = secrets_key
             st.session_state.key_confirmed = True
     except (KeyError, FileNotFoundError):
-        pass  # 没有配置 secrets，走手动输入流程
+        pass
 
 L = LANG_LABELS[st.session_state.lang]
 
@@ -184,10 +247,35 @@ with st.sidebar:
 
     st.divider()
 
-    # FIX: API Key 区域判断只依赖 session_state，不再二次读 secrets
-    # 原来: if st.session_state.key_confirmed and st.secrets.get("ANTHROPIC_API_KEY", "")
-    # 修复: if st.session_state.key_confirmed（已连接就显示提示，不管来源）
-    if st.session_state.key_confirmed:
+    # 后端选择
+    backend_label = st.selectbox(
+        L["select_backend"], list(BACKENDS.keys()),
+        index=list(BACKENDS.values()).index(st.session_state.backend))
+    new_backend = BACKENDS[backend_label]
+    if new_backend != st.session_state.backend:
+        st.session_state.backend = new_backend
+        st.session_state.key_confirmed = False
+        st.session_state.api_key = ""
+        st.session_state.messages = []
+        # 切换回 anthropic 时自动重新尝试读 secrets
+        if new_backend == "anthropic":
+            try:
+                secrets_key = st.secrets["ANTHROPIC_API_KEY"]
+                if secrets_key and secrets_key.startswith("sk-"):
+                    st.session_state.api_key = secrets_key
+                    st.session_state.key_confirmed = True
+            except (KeyError, FileNotFoundError):
+                pass
+        st.rerun()
+
+    st.divider()
+
+    # API Key 区域
+    if st.session_state.backend == "ollama":
+        # 本地模式无需 key，直接标记已连接
+        st.info(L["ollama_notice"])
+        st.session_state.key_confirmed = True
+    elif st.session_state.key_confirmed:
         st.info(L["secrets_notice"])
     else:
         key_input = st.text_input(L["api_key"], type="password",
@@ -221,7 +309,7 @@ with st.sidebar:
 
     st.divider()
 
-    # 醒目状态显示
+    # 连接状态
     status_color = L["connected_color"] if st.session_state.key_confirmed else L["disconnected_color"]
     status_text = L["connected"] if st.session_state.key_confirmed else L["disconnected"]
     st.markdown(
@@ -247,7 +335,7 @@ def update_mastery(concept_id, response_text):
         st.session_state.mastery_ready = True
 
 def generate_summary(concept_id):
-    client = Anthropic(api_key=st.session_state.api_key)
+    adapter = get_adapter()
     digest = "\n".join(
         f"{m['role'].upper()}: {m['content'][:200]}"
         for m in st.session_state.messages[-8:]
@@ -259,13 +347,12 @@ def generate_summary(concept_id):
               f"1. 核心法则 / Core Rule: [公式 / formula]\n"
               f"2. 关键步骤 / Key Steps: 1. [步骤] 2. [步骤] ...\n"
               f"3. ⚠️ 陷阱提示 / Pitfall: [本次学生实际犯的错误，一句话]")
-    return client.messages.create(
-        model=MODEL_NAME, max_tokens=600,
-        messages=[{"role": "user", "content": prompt}]
-    ).content[0].text
+    return adapter.chat("You are a helpful summarizer.", 
+                        [{"role": "user", "content": prompt}], 
+                        max_tokens=600)
 
 def get_ai_response(extra_content=None):
-    client = Anthropic(api_key=st.session_state.api_key)
+    adapter = get_adapter()
     concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
     L_local = LANG_LABELS[st.session_state.lang]
     system_msg = (
@@ -283,11 +370,7 @@ def get_ai_response(extra_content=None):
     if extra_content:
         msgs.append({"role": "user", "content": extra_content})
     with st.spinner(L_local["spinner"]):
-        response = client.messages.create(
-            model=MODEL_NAME, max_tokens=1500,
-            system=system_msg, messages=msgs
-        )
-        reply = response.content[0].text
+        reply = adapter.chat(system_msg, msgs)
         update_mastery(concept_id, reply)
         for tag in ["[STATUS: CORRECT]", "[STATUS: PARTIAL]",
                     "[STATUS: INCORRECT]", "[STATUS: GUIDING]"]:
@@ -325,13 +408,11 @@ if not st.session_state.messages:
     if st.session_state.lang == "Chinese":
         opening = OPENING_PROMPTS.get(
             concept_id,
-            L["opening_default"].format(concept=st.session_state.curr_concept)
-        )
+            L["opening_default"].format(concept=st.session_state.curr_concept))
     else:
         opening = OPENING_PROMPTS.get(
             key_en,
-            L["opening_default"].format(concept=st.session_state.curr_concept)
-        )
+            L["opening_default"].format(concept=st.session_state.curr_concept))
     first = get_ai_response(opening)
     st.session_state.messages.append({"role": "assistant", "content": first})
     st.rerun()
