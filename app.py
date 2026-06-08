@@ -363,6 +363,14 @@ def get_ai_response(extra_content=None):
         f"at the very end of every response, on its own line: "
         f"[STATUS: CORRECT], [STATUS: PARTIAL], [STATUS: INCORRECT], or [STATUS: GUIDING]. "
         f"No other text after the tag."
+        f"\nSINGLE-PROBLEM RULE: Only work on ONE problem at a time. "
+        f"If the student submits multiple problems (from chat, exercises, or external sources): "
+        f"1. Acknowledge you see multiple problems. "
+        f"2. List them briefly by number. "
+        f"3. Ask: '你想先从哪道题开始？/ Which problem would you like to start with?' "
+        f"4. Wait for the student's choice before proceeding. "
+        f"Do NOT attempt to answer or guide any problem until the student selects exactly one. "
+        f"If the student insists on multiple, politely redirect: one problem at a time is the rule."
     )
     msgs = [{"role": m["role"], "content": m["content"]}
             for m in st.session_state.messages
