@@ -7,8 +7,6 @@ st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
 # ══════════════════════════════════════════════════════
 # 后端适配器层
-# 统一接口：adapter.chat(system, messages, max_tokens)
-# 切换后端只需改 session_state.backend，教学逻辑零改动
 # ══════════════════════════════════════════════════════
 
 class AnthropicAdapter:
@@ -39,7 +37,6 @@ class OllamaAdapter:
         self.model = model
         self.url = "http://localhost:11434/api/chat"
     def chat(self, system, messages, max_tokens=1500):
-        import json
         msgs = [{"role": "system", "content": system}] + messages
         r = __import__("requests").post(
             self.url,
@@ -63,7 +60,7 @@ def get_adapter():
         return OllamaAdapter()
 
 # ══════════════════════════════════════════════════════
-# 教学数据（不随后端变化）
+# 教学数据
 # ══════════════════════════════════════════════════════
 
 UNITS = {
@@ -84,44 +81,132 @@ UNITS = {
         "3.X 综合练习": "3.X"
     },
     "Unit 4: 导数应用": {
-        "4.1 极值定理": "4.1", "4.2 中值定理": "4.2",
+        "4.1 极值定理": "4.1",
+        "4.2 中值定理": "4.2",
         "4.3 相关变化率": "4.3",
+        "4.4 导数图像判读": "4.4",
+        "4.5 线性近似": "4.5",
         "4.X 综合练习": "4.X"
     },
 }
 
 CONCEPT_CONSTRAINTS = {
-    "1.1": "Ensure student builds intuition numerically/graphically before algebra. Start with a concrete numerical example before asking about the formal definition.",
+    # ── Unit 1 ──────────────────────────────────────────
+    "1.1": "Ensure student builds intuition numerically/graphically before algebra. "
+           "Start with a concrete numerical example before asking about the formal definition.",
     "1.2": "Guide student to apply limit laws step by step. Do not skip steps.",
     "1.3": "Focus on the three-part definition of continuity at a point.",
-    "1.4": "Guide student to identify vertical and horizontal asymptotes separately. Check both sides for vertical asymptotes.",
-    "1.X": "Generate a comprehensive problem combining limits, continuity, and asymptotes. Cover at least two sub-topics from Unit 1.",
-    "2.1": "HARD RULE: Guide student to derive the derivative using the limit definition f\'(x)=lim(h→0)[f(x+h)-f(x)]/h. Do not skip the limit process.",
-    "2.2": "Ensure student understands differentiability implies continuity but not vice versa. Use a counterexample if needed.",
+    "1.4": "Guide student to identify vertical and horizontal asymptotes separately. "
+           "Check both sides for vertical asymptotes.",
+    "1.X": "Generate a comprehensive problem combining limits, continuity, and asymptotes. "
+           "Cover at least two sub-topics from Unit 1.",
+    # ── Unit 2 ──────────────────────────────────────────
+    "2.1": "HARD RULE: Guide student to derive the derivative using the limit definition "
+           "f\'(x)=lim(h→0)[f(x+h)-f(x)]/h. Do not skip the limit process.",
+    "2.2": "Ensure student understands differentiability implies continuity but not vice versa. "
+           "Use a counterexample if needed.",
     "2.3": "Focus on connecting the sign of f\'(x) to increasing/decreasing behavior of f(x).",
     "2.4": "Guide student to apply differentiation rules repeatedly for higher-order derivatives.",
-    "2.X": "Generate a comprehensive problem combining limit definition of derivative, differentiability, and graphical interpretation.",
-    "3.1": "HARD RULE: Decompose f(g(x)) into f(u) and g(x) explicitly before differentiating. If student skips decomposition, redirect immediately.",
-    "3.2": "HARD RULE: Ensure dy/dx appears explicitly when differentiating y terms. If missing, redirect.",
-    "3.3": "HARD RULE: For products, require student to identify u and v explicitly before applying (uv)\'=u\'v+uv\'. For quotients, require student to identify numerator and denominator before applying the quotient rule.",
-    "3.4": "Verify student correctly applies the inverse function derivative formula. Check that f\'(f⁻¹(x)) is evaluated at the correct point.",
-    "3.5": "HARD RULE: Require student to write dx/dt and dy/dt separately before computing dy/dx=(dy/dt)/(dx/dt). Do not allow direct substitution without showing both derivatives.",
-    "3.X": "Generate a comprehensive problem combining chain rule, implicit differentiation, product/quotient rules, inverse function derivatives, and parametric derivatives.",
-    "4.1": "Ensure student explicitly states and checks all conditions of the Extreme Value Theorem before applying it.",
-    "4.2": "Guide student to verify all three MVT hypotheses: continuity on [a,b], differentiability on (a,b), before applying.",
-    "4.3": "Ensure student identifies all related variables, writes the relationship equation, and differentiates with respect to time.",
-    "4.X": "Generate a comprehensive problem combining optimization, MVT, and related rates.",
+    "2.X": "Generate a comprehensive problem combining limit definition of derivative, "
+           "differentiability, and graphical interpretation.",
+    # ── Unit 3 ──────────────────────────────────────────
+    "3.1": "HARD RULE: Decompose f(g(x)) into f(u) and g(x) explicitly before differentiating. "
+           "If student skips decomposition, redirect immediately.",
+    "3.2": "HARD RULE: Ensure dy/dx appears explicitly when differentiating y terms. "
+           "If missing, redirect.",
+    "3.3": "HARD RULE: For products, require student to identify u and v explicitly before "
+           "applying (uv)\'=u\'v+uv\'. For quotients, require student to identify numerator "
+           "and denominator before applying the quotient rule.",
+    "3.4": "Verify student correctly applies the inverse function derivative formula. "
+           "Check that f\'(f⁻¹(x)) is evaluated at the correct point.",
+    "3.5": "HARD RULE: Require student to write dx/dt and dy/dt separately before computing "
+           "dy/dx=(dy/dt)/(dx/dt). Do not allow direct substitution without showing both derivatives.",
+    "3.X": "Generate a comprehensive problem combining chain rule, implicit differentiation, "
+           "product/quotient rules, inverse function derivatives, and parametric derivatives.",
+    # ── Unit 4 ──────────────────────────────────────────
+    "4.1": "HARD RULE: Student MUST explicitly state and verify ALL conditions of the Extreme "
+           "Value Theorem (closed interval + continuity) before applying it. "
+           "If student jumps to finding critical points without stating conditions, redirect. "
+           "CRITICAL POINT RULE: Critical points include ALL points where f\'=0 OR f\' does not "
+           "exist (e.g. corners, cusps). If student claims a non-differentiable point is not a "
+           "critical point, correct immediately. "
+           "ENDPOINT RULE: Always require comparison of ALL candidates: critical points AND "
+           "both endpoints. If student compares only critical points, ask: "
+           "\'你比较了所有候选点吗？端点的函数值是多少？/ "
+           "Did you compare all candidates? What are the function values at the endpoints?\'",
+    "4.2": "HARD RULE: Student MUST verify all THREE MVT hypotheses in order: "
+           "(1) continuity on [a,b], (2) differentiability on (a,b), before applying the theorem. "
+           "If student skips hypothesis verification, redirect immediately. "
+           "IVT vs MVT RULE: If student uses MVT to prove existence of a zero (root), "
+           "correct immediately: MVT gives f\'(c) = average rate of change, not f(c)=0. "
+           "The correct theorem for zero existence is the Intermediate Value Theorem (IVT). "
+           "TWO-STEP UNIQUENESS RULE: For \'exactly one root\' problems, require TWO separate "
+           "steps: Step 1 = existence via IVT, Step 2 = uniqueness via monotonicity (f\'>0 or f\'<0). "
+           "Do not accept a proof that skips either step. "
+           "If student states f\'(x)>0 without computing f\'(x) explicitly, ask: "
+           "\'请计算 f\'(x) 并说明它为何恒正。/ Please compute f\'(x) and explain why it is always positive.\'",
+    "4.3": "HARD RULE: Student MUST follow this exact sequence: "
+           "(1) identify and name all variables, (2) write the relationship equation, "
+           "(3) differentiate with respect to time t using chain rule, (4) THEN substitute values. "
+           "PRE-SUBSTITUTION TRAP: If student substitutes a specific numerical value into a "
+           "variable BEFORE differentiating (e.g. writes A=25π then differentiates), "
+           "intercept immediately: "
+           "\'你在求导前代入了具体数值，这会把变量变成常数，导数为0。"
+           "请保留变量形式，对时间t求导后再代入。/ "
+           "You substituted a value before differentiating. This turns the variable into a "
+           "constant with derivative 0. Keep the variable, differentiate with respect to t first, "
+           "then substitute.\' "
+           "SIGN RULE: Always require student to interpret the physical meaning of negative "
+           "derivatives (e.g. negative dy/dt means the quantity is decreasing).",
+    "4.4": "DERIVATIVE GRAPH READING RULE: Guide student to carefully distinguish between "
+           "properties of f\'(x) and the corresponding properties of f(x). "
+           "HARD RULE 1 — INFLECTION POINT: Where f\'(x) has a local extremum (max or min), "
+           "f(x) has an INFLECTION POINT, NOT an extremum. If student confuses these, "
+           "redirect immediately: "
+           "\'f\'在该点有极值，这意味着f\'在该点改变单调性，即f在该点有拐点，不是极值点。/ "
+           "f\' has an extremum here, meaning f\' changes monotonicity, so f has an inflection "
+           "point here, not an extremum.\' "
+           "HARD RULE 2 — SIGN CHANGE VERIFICATION: f\'(x)=0 is necessary but NOT sufficient "
+           "for an inflection point of f(x). Student MUST verify that f\'(x) changes sign "
+           "around that zero. If student claims a zero of f\' is automatically an inflection "
+           "point without checking sign change, redirect. "
+           "CONCAVITY RULE: Where f\'(x) is increasing, f(x) is concave up (f\'\'>0). "
+           "Where f\'(x) is decreasing, f(x) is concave down (f\'\'<0). "
+           "Require student to state concavity explicitly.",
+    "4.5": "HARD RULE: Student MUST write the full linearization formula "
+           "L(x) = f(a) + f\'(a)(x-a) explicitly before substituting any values. "
+           "DIRECT COMPUTATION TRAP: If student computes f(x_target) directly without using "
+           "the linearization formula, redirect immediately: "
+           "\'题目要求用线性化近似，必须通过切线方程L(x)计算，不能直接求值。/ "
+           "The problem requires linearization. You must use the tangent line equation L(x), "
+           "not direct computation.\' "
+           "MISSING TERM TRAP: If student writes L(x) = f\'(a)(x-a) omitting f(a), "
+           "redirect: \'线性化公式是L(x)=f(a)+f\'(a)(x-a)，你遗漏了f(a)这一项。/ "
+           "The linearization formula is L(x)=f(a)+f\'(a)(x-a). You are missing the f(a) term.\' "
+           "Require student to identify the base point a (choose a nearby value where f is easy "
+           "to compute exactly), then compute f(a) and f\'(a) before substituting.",
+    "4.X": "Generate a comprehensive problem combining EVT, MVT, related rates, "
+           "derivative graph reading, and linear approximation. "
+           "Cover at least three sub-topics from Unit 4.",
 }
 
 OPENING_PROMPTS = {
+    # ── Unit 1 ──────────────────────────────────────────
     "1.X": "请出一道Unit 1综合题，综合考查极限、连续性和渐近线，包含至少两个子问题。",
-    "2.X": "请出一道Unit 2综合题，综合考查导数定义、可导与连续、导数图像，包含至少两个子问题。",
-    "3.X": "请出一道Unit 3综合题，综合考查链式法则、隐函数求导、乘积与商法则、反函数求导和参数方程求导，包含至少两个子问题。",
-    "4.X": "请出一道Unit 4综合题，综合考查极值定理、中值定理和相关变化率，包含至少两个子问题。",
     "1.X_en": "Generate a comprehensive Unit 1 problem covering limits, continuity, and asymptotes. Include at least two sub-questions.",
+    # ── Unit 2 ──────────────────────────────────────────
+    "2.X": "请出一道Unit 2综合题，综合考查导数定义、可导与连续、导数图像，包含至少两个子问题。",
     "2.X_en": "Generate a comprehensive Unit 2 problem covering limit definition of derivative, differentiability, and graphical interpretation. Include at least two sub-questions.",
+    # ── Unit 3 ──────────────────────────────────────────
+    "3.X": "请出一道Unit 3综合题，综合考查链式法则、隐函数求导、乘积与商法则、反函数求导和参数方程求导，包含至少两个子问题。",
     "3.X_en": "Generate a comprehensive Unit 3 problem covering chain rule, implicit differentiation, product/quotient rules, inverse function derivatives, and parametric derivatives. Include at least two sub-questions.",
-    "4.X_en": "Generate a comprehensive Unit 4 problem covering optimization, MVT, and related rates. Include at least two sub-questions.",
+    # ── Unit 4 ──────────────────────────────────────────
+    "4.4": "请出一道导数图像判读题：给出一段关于f\'(x)图像特征的描述（如极值点、零点、正负区间），要求学生判断f(x)的增减性、凹凸性及拐点位置。不要直接给出答案，先只问第一个引导性问题。",
+    "4.4_en": "Generate a derivative graph reading problem: describe key features of f\'(x) (such as local extrema, zeros, sign intervals), and ask the student to determine the monotonicity, concavity, and inflection points of f(x). Do not give the answer. Ask only the first guiding question.",
+    "4.5": "请出一道线性近似题，要求学生用线性化公式L(x)=f(a)+f\'(a)(x-a)估算一个函数值（如sqrt(4.1)、sin(0.1)、e^0.1等）。不要直接给出步骤，先只问第一个引导性问题。",
+    "4.5_en": "Generate a linearization problem asking the student to estimate a function value (e.g. sqrt(4.1), sin(0.1), e^0.1) using L(x)=f(a)+f\'(a)(x-a). Do not give steps. Ask only the first guiding question.",
+    "4.X": "请出一道Unit 4综合题，综合考查极值定理、中值定理、相关变化率、导数图像判读和线性近似，包含至少三个子问题。",
+    "4.X_en": "Generate a comprehensive Unit 4 problem covering EVT, MVT, related rates, derivative graph reading, and linear approximation. Include at least three sub-questions.",
 }
 
 LANG_LABELS = {
@@ -224,13 +309,15 @@ for k, v in {
     if k not in st.session_state:
         st.session_state[k] = v
 
-# ── 自动加载 Secrets（FIX: try/except 而非 .get()）────────
+# ── 自动加载 Secrets ──────────────────────────────────────
+# FIX: 加载成功后立即 rerun，确保状态在首次渲染后立即生效
 if not st.session_state.key_confirmed:
     try:
         secrets_key = st.secrets["ANTHROPIC_API_KEY"]
         if secrets_key and secrets_key.startswith("sk-"):
             st.session_state.api_key = secrets_key
             st.session_state.key_confirmed = True
+            st.rerun()
     except (KeyError, FileNotFoundError):
         pass
 
@@ -240,7 +327,6 @@ L = LANG_LABELS[st.session_state.lang]
 with st.sidebar:
     st.title(L["config"])
 
-    # 语言切换
     if st.button(L["lang_btn"], use_container_width=True):
         st.session_state.lang = "English" if st.session_state.lang == "Chinese" else "Chinese"
         st.rerun()
@@ -257,7 +343,6 @@ with st.sidebar:
         st.session_state.key_confirmed = False
         st.session_state.api_key = ""
         st.session_state.messages = []
-        # 切换回 anthropic 时自动重新尝试读 secrets
         if new_backend == "anthropic":
             try:
                 secrets_key = st.secrets["ANTHROPIC_API_KEY"]
@@ -271,15 +356,14 @@ with st.sidebar:
     st.divider()
 
     # API Key 区域
+    # FIX: 去掉 value= 参数，解决手机端退格键失效问题
     if st.session_state.backend == "ollama":
-        # 本地模式无需 key，直接标记已连接
         st.info(L["ollama_notice"])
         st.session_state.key_confirmed = True
     elif st.session_state.key_confirmed:
         st.info(L["secrets_notice"])
     else:
-        key_input = st.text_input(L["api_key"], type="password",
-                                   value=st.session_state.api_key)
+        key_input = st.text_input(L["api_key"], type="password")
         if st.button(L["confirm_key"]):
             if key_input.startswith("sk-"):
                 st.session_state.api_key = key_input
@@ -309,9 +393,8 @@ with st.sidebar:
 
     st.divider()
 
-    # 连接状态
     status_color = L["connected_color"] if st.session_state.key_confirmed else L["disconnected_color"]
-    status_text = L["connected"] if st.session_state.key_confirmed else L["disconnected"]
+    status_text  = L["connected"] if st.session_state.key_confirmed else L["disconnected"]
     st.markdown(
         f"<div style='background:{status_color};color:white;padding:12px;"
         f"border-radius:8px;text-align:center;font-size:16px;font-weight:bold;'>"
@@ -347,8 +430,8 @@ def generate_summary(concept_id):
               f"1. 核心法则 / Core Rule: [公式 / formula]\n"
               f"2. 关键步骤 / Key Steps: 1. [步骤] 2. [步骤] ...\n"
               f"3. ⚠️ 陷阱提示 / Pitfall: [本次学生实际犯的错误，一句话]")
-    return adapter.chat("You are a helpful summarizer.", 
-                        [{"role": "user", "content": prompt}], 
+    return adapter.chat("You are a helpful summarizer.",
+                        [{"role": "user", "content": prompt}],
                         max_tokens=600)
 
 def get_ai_response(extra_content=None):
