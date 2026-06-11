@@ -588,3 +588,28 @@ if st.session_state.mastery_ready:
 if st.session_state.last_summary:
     with st.expander(L["summary_title"], expanded=True):
         st.markdown(st.session_state.last_summary)
+
+
+# ───────── Session 持久化：导出/恢复（防中断丢失） ─────────
+import json as _json
+with st.sidebar:
+    st.divider()
+    st.caption("💾 会话持久化")
+    _exp = {}
+    for _k, _v in st.session_state.items():
+        try:
+            _json.dumps(_v); _exp[_k] = _v
+        except (TypeError, ValueError):
+            pass
+    st.download_button("⬇️ 导出会话 JSON",
+        data=_json.dumps(_exp, ensure_ascii=False, indent=2),
+        file_name="luocal_session.json", mime="application/json")
+    _up = st.file_uploader("⬆️ 恢复会话", type="json", key="_restore_up")
+    if _up is not None and not st.session_state.get("_restored"):
+        for _k, _v in _json.loads(_up.getvalue().decode("utf-8")).items():
+            try:
+                st.session_state[_k] = _v
+            except Exception:
+                pass
+        st.session_state["_restored"] = True
+        st.rerun()
