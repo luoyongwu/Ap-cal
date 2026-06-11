@@ -121,8 +121,21 @@ CONCEPT_CONSTRAINTS = {
            "Check that f\'(f⁻¹(x)) is evaluated at the correct point.",
     "3.5": "HARD RULE: Require student to write dx/dt and dy/dt separately before computing "
            "dy/dx=(dy/dt)/(dx/dt). Do not allow direct substitution without showing both derivatives.",
-    "3.X": "Generate a comprehensive problem combining chain rule, implicit differentiation, "
-           "product/quotient rules, inverse function derivatives, and parametric derivatives.",
+    # NOTE: 3.X 有意包含参数方程求导（3.5）——对 AP CED 的课程扩展
+    # （CED 中参数方程属 BC Unit 9）。设计决策记录于 changelog。
+    "3.X": """HARD RULE for Unit 3 comprehensive review:
+1. Generate ONE problem at a time, combining at least TWO Unit 3 skills:
+   chain rule, implicit differentiation, inverse functions,
+   inverse trig functions, product/quotient rules,
+   higher-order derivatives, parametric derivatives dy/dx=(dy/dt)/(dx/dt).
+2. Maximum 2 sub-questions per problem.
+3. After presenting the problem, the FIRST question must be:
+   Which differentiation method(s) does this problem need, and why?
+   Never choose a starting point for the student.
+4. If the student picks a wrong method, do not correct directly;
+   let them attempt one step and discover the contradiction themselves.
+5. Only after the problem is fully resolved may a new one be generated,
+   with a different skill combination.""",
     # ── Unit 4 ──────────────────────────────────────────
     "4.1": "HARD RULE: Student MUST explicitly state and verify ALL conditions of the Extreme "
            "Value Theorem (closed interval + continuity) before applying it. "
