@@ -88,6 +88,20 @@ UNITS = {
         "4.5 线性近似": "4.5",
         "4.X 综合练习": "4.X"
     },
+    "Unit 5: 积分": {
+        "5.1 不定积分与原函数": "5.1",
+        "5.2 黎曼和与定积分": "5.2",
+        "5.3 微积分基本定理": "5.3",
+        "5.4 换元积分法": "5.4",
+        "5.5 净变化量与运动问题": "5.5",
+        "5.X 综合练习": "5.X"
+    },
+    "Unit 6: 积分应用": {
+        "6.1 两曲线间面积": "6.1",
+        "6.2 旋转体与已知截面体积": "6.2",
+        "6.3 函数平均值与积分中值定理": "6.3",
+        "6.X 综合练习": "6.X"
+    },
 }
 
 CONCEPT_CONSTRAINTS = {
@@ -201,6 +215,127 @@ CONCEPT_CONSTRAINTS = {
     "4.X": "Generate a comprehensive problem combining EVT, MVT, related rates, "
            "derivative graph reading, and linear approximation. "
            "Cover at least three sub-topics from Unit 4.",
+    # ── Unit 5 ──────────────────────────────────
+    "5.1": """HARD RULE for 5.1 (Antiderivatives & Indefinite Integrals):
+1. NEVER accept an antiderivative without '+C'. If omitted, ask: 'How many
+   different functions have exactly this derivative? Name two.'
+2. GEOMETRIC ANCHOR before any symbolic drill: the student must articulate
+   that an indefinite integral is a FAMILY of vertically shifted curves
+   (slope-field framing). No computation until this is voiced.
+3. If the student treats the integral as ONE function, ask: 'Your friend got
+   a different answer that also differentiates to f(x). Are they wrong?'
+4. Every antiderivative claim must be checked by differentiation.""",
+    "5.2": """HARD RULE for 5.2 (Riemann Sums & the Definite Integral):
+1. Any approximation must first be NAMED: left, right, midpoint, trapezoid.
+2. Every approximation requires an over/under-estimate judgment justified by
+   monotonicity (left/right) or concavity (midpoint/trapezoid).
+3. Conflated sum types: do not correct; ask the student to list the sample
+   points actually used.
+4. The definite integral must be voiced as the LIMIT of these sums before
+   FTC shortcuts are permitted here.
+5. At least once, the sum must be written out for n = 4 subintervals.""",
+    "5.3": """HARD RULE for 5.3 (FTC Parts 1 & 2, STRICTLY SEPARATED):
+1. NEVER allow 'the FTC' unqualified; every use must be tagged Part 1
+   (d/dx of an accumulation integral) or Part 2 (evaluation F(b)-F(a)),
+   by the student.
+2. VARIABLE-LIMIT TRAP: upper limit g(x) means the answer is f(g(x))*g'(x).
+   Missing chain factor: do not correct; ask 'What is the OUTER function
+   here and the INNER one? Where have we met this structure before?'
+3. Dummy-variable hygiene: integral of f(x)dx with upper limit x triggers
+   'x is doing two different jobs here - can you separate them?'
+4. Part 2 requires confirming F is an antiderivative (by differentiation)
+   before evaluating.
+5. Wrong Part chosen: let the student set it up and discover the mismatch.""",
+    "5.4": """HARD RULE for 5.4 (Substitution Rule):
+1. Indefinite: u and du declared explicitly first; du never absorbed silently.
+2. BOUNDS TRAP (core): definite-integral substitution requires the new bounds
+   u(a), u(b) written BEFORE any evaluation. If the student evaluates in u
+   with x-bounds, do not correct; ask: 'Your limits - are those values of x,
+   or values of u? Which variable is your integrand in now?'
+3. Once bounds are converted, back-substitution to x is forbidden; if both
+   are done, ask which step was wasted.
+4. du off by a constant: let the student finish and discover it by
+   differentiation check.
+5. Unproductive u: allow two steps, then ask 'is the integral getting
+   simpler or messier?'""",
+    "5.5": """HARD RULE for 5.5 (Net Change Theorem & Motion):
+1. PHYSICAL ANCHOR first: the student must voice what (integrand units x dt)
+   means before computing.
+2. DISPLACEMENT vs TOTAL DISTANCE (core): total distance integrates |v(t)|.
+   If v is integrated without absolute value, ask: 'Was the particle ever
+   moving backward? What does your integral do with that portion?'
+3. |v| handling must be explicit: solve v(t)=0, split, flip signs - no
+   shortcuts before the sign analysis is voiced.
+4. Position from velocity needs an initial condition; '+C' in a definite
+   context triggers 'what extra information pins the curve down?'
+5. Speed vs velocity vocabulary is strict; conflation triggers a definition
+   request, not a correction.""",
+    "5.X": """HARD RULE for Unit 5 comprehensive review:
+1. Each problem combines at least TWO skills from this whitelist ONLY:
+   antiderivatives/+C, Riemann-sum identification, FTC Part 1 (incl.
+   variable limits), FTC Part 2, substitution WITH bounds conversion,
+   net change / displacement-vs-distance. No Unit 6+, no differential
+   equations, no parametric/polar.
+2. At least one skill must be a flagged trap: substitution-with-bounds or
+   variable-limit FTC Part 1.
+3. Maximum 2 sub-questions.
+4. First tutor move: 'Which integration tool(s) does this problem need,
+   and why?' FTC use must be tagged Part 1 or Part 2.
+5. Never choose a starting point for the student.
+6. Wrong method: one step, let the contradiction surface; no direct
+   correction.
+7. One problem at a time; next problem changes the combination.""",
+    # ── Unit 6 ──────────────────────────────────
+    "6.1": """HARD RULE for 6.1 (Area Between Curves):
+1. SLICING DECISION FIRST: vertical (in x, top minus bottom) or horizontal
+   (in y, right minus left), justified from the geometry, before any setup.
+2. Intersections before limits: bounds come from solving f = g.
+3. Crossing curves with a single integral of (f-g): do not correct; have the
+   student check the sign on each side and say what negative 'area' means.
+4. If horizontal slicing wins and the student grinds in x, let them finish
+   the setup, then ask how many integrals it cost and to describe one
+   HORIZONTAL slice.
+5. 'Top/bottom' or 'right/left' must be named as functions.""",
+    "6.2": """HARD RULE for 6.2 (Volumes: Disk/Washer & Known Cross-Sections):
+1. METHOD CLASSIFICATION FIRST: disk / washer / known cross-sections,
+   justified from the geometry, before any integral.
+2. WASHER TRAP (core): the integrand is pi*(R^2 - r^2), NEVER pi*(R-r)^2.
+   If (R-r)^2 appears, ask: 'A washer with outer radius 3, inner radius 1 -
+   what is its area? What does your formula give?'
+3. Off-axis rotation (about y=k or x=h): radii are DISTANCES to the axis;
+   R and r must be defined in words before substituting.
+4. Known cross-sections: write the area A(x) of ONE slice first; V is the
+   integral of A(x). Confusion with revolution triggers 'is anything
+   rotating in this problem?'
+5. SHELL METHOD is a documented curriculum extension (BC/enrichment,
+   analogous to parametric 3.5): present ONLY if the student self-identifies
+   as BC or explicitly asks, and build 2*pi*(radius)*(height) from one
+   described shell, never quoted as formula.""",
+    "6.3": """HARD RULE for 6.3 (Average Value & MVT for Integrals):
+1. CONFLATION TRAP (core): average VALUE is (1/(b-a)) * integral of f;
+   average RATE OF CHANGE is (f(b)-f(a))/(b-a). If one is computed for the
+   other, ask: 'Is the question about the heights of f, or about how fast
+   f changed?'
+2. GEOMETRIC ANCHOR mandatory: the equal-area rectangle interpretation must
+   be voiced before any formula use.
+3. MVT for Integrals: state the continuity hypothesis and interpret c
+   geometrically ('the curve attains its average height'). Bridge question
+   allowed: how does this relate to the derivative MVT from Unit 4?
+4. If c is requested and only f_avg is computed, surface the gap
+   Socratically: c solves f(c) = f_avg.""",
+    "6.X": """HARD RULE for Unit 6 comprehensive review:
+1. Each problem combines at least TWO skills from this whitelist ONLY:
+   area between curves (incl. slicing decision), disk/washer volumes,
+   known cross-section volumes, average value / MVT for integrals. Net
+   change (5.5) may appear as bridging context. Shell only under 6.2
+   rule 5. No arc length, surface area, or differential equations.
+2. At least one flagged trap: crossing curves, washer squaring, or
+   value-vs-rate conflation.
+3. Maximum 2 sub-questions.
+4. First tutor move: 'What is your slicing/setup strategy, and which
+   method does each part need - why?' Never choose a starting point.
+5. Wrong method: one step, let the contradiction surface.
+6. One problem at a time; next problem changes the combination.""",
 }
 
 OPENING_PROMPTS = {
@@ -220,6 +355,26 @@ OPENING_PROMPTS = {
     "4.5_en": "Generate a linearization problem asking the student to estimate a function value (e.g. sqrt(4.1), sin(0.1), e^0.1) using L(x)=f(a)+f\'(a)(x-a). Do not give steps. Ask only the first guiding question.",
     "4.X": "请出一道Unit 4综合题，综合考查极值定理、中值定理、相关变化率、导数图像判读和线性近似，包含至少三个子问题。",
     "4.X_en": "Generate a comprehensive Unit 4 problem covering EVT, MVT, related rates, derivative graph reading, and linear approximation. Include at least three sub-questions.",
+    "5.1": "请出一道不定积分题。计算前先要求学生描述：所有以被积函数为导数的函数构成怎样的一簇曲线、彼此几何关系如何（斜率场视角）；说出曲线簇之前不进入计算，并坚持 +C。",
+    "5.1_en": "Generate an antiderivative problem. Before any computation, the student must describe the FAMILY of curves whose derivative equals the integrand (slope-field view); insist on +C.",
+    "5.2": "请出一道黎曼和近似题（n=4）。学生须先命名所用的和（左/右/中点/梯形），并在计算前判断高估还是低估、用单调性或凹凸性论证。",
+    "5.2_en": "Generate a Riemann-sum problem (n=4). The student must first NAME the sum type and predict over/under-estimation with justification, before computing.",
+    "5.3": "请出一道变限积分求导题（上限为 g(x)）。第一问固定：这题由 FTC 的哪一部分管辖、如何判断；每次使用 FTC 须标注 Part 1 或 Part 2。",
+    "5.3_en": "Generate a variable-limit differentiation problem. First question: which PART of the FTC governs it and why. Every FTC use must be tagged Part 1 or Part 2.",
+    "5.4": "请出一道定积分换元题。第一问固定：如果换元 u=…，式子里有哪三样东西必须同时改变？换元后未写出新边界 u(a)、u(b) 不得求值。",
+    "5.4_en": "Generate a definite-integral substitution problem. First question: which THREE things must change under the substitution? No evaluation before new bounds are written.",
+    "5.5": "请出一道速度函数运动题（v(t) 在区间内变号）。先问：位移和总路程在这题里是同一个数吗、计算前如何判断；总路程须先做 v(t)=0 符号分析分段。",
+    "5.5_en": "Generate a motion problem with v(t) changing sign. Ask first whether displacement and total distance coincide here and how to tell BEFORE integrating.",
+    "5.X": "请出一道 Unit 5 综合题：白名单内至少两个技能，必含一个高错陷阱（带边界换元或变限 FTC Part 1）；至多两个子问；第一问固定：这道题需要哪些积分工具、为什么？不得替学生选起点。",
+    "5.X_en": "Generate a Unit 5 comprehensive problem: at least two whitelist skills including one flagged trap (bounds substitution or variable-limit FTC); max 2 sub-questions; first question: which integration tools and why? Never choose the starting point.",
+    "6.1": "请出一道两曲线间面积题（优先横切更优或曲线相交的情形）。强制第一步：先选纵切还是横切并以几何论证；交点先于上下限。",
+    "6.1_en": "Generate an area-between-curves problem (prefer cases where horizontal slicing wins or curves cross). Mandatory first move: choose the slicing direction with geometric justification.",
+    "6.2": "请出一道体积题（圆盘/垫圈/已知截面，优先含空隙的垫圈情形）。第一问固定：先归类方法并以几何论证；警惕先减后平方错误。",
+    "6.2_en": "Generate a volume problem (disk/washer/known cross-sections; prefer washer-with-gap). First move: classify the method with geometric justification.",
+    "6.3": "请出一道函数平均值题。用公式前先要求等面积矩形解释，并区分平均值与平均变化率；涉及积分中值定理时须陈述连续性并几何解读 c。",
+    "6.3_en": "Generate an average-value problem. Require the equal-area rectangle interpretation first and the value-vs-rate distinction; for the MVT for integrals, state continuity and interpret c.",
+    "6.X": "请出一道 Unit 6 综合题：白名单内至少两个技能、必含一个标记陷阱（相交曲线/垫圈平方/值与率混淆）；至多两个子问；第一问固定：你的切片与设置策略是什么、各部分用什么方法、为什么？",
+    "6.X_en": "Generate a Unit 6 comprehensive problem: at least two whitelist skills including one flagged trap; max 2 sub-questions; first question: what is your slicing/setup strategy and which method does each part need, and why?",
 }
 
 LANG_LABELS = {
