@@ -10,7 +10,7 @@ st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 # ══════════════════════════════════════════════════════
 
 class AnthropicAdapter:
-    MODEL = "claude-sonnet-4-20250514"
+    MODEL = "claude-sonnet-4-6"
     def __init__(self, api_key):
         self.client = Anthropic(api_key=api_key)
     def chat(self, system, messages, max_tokens=1500):
