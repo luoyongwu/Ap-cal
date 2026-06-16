@@ -142,6 +142,21 @@ UNITS = {
     },
 }
 
+
+
+def _filtered_UNITS():
+    _track = st.session_state.get("student_track", "AB")
+    if _track == "BC":
+        return UNITS
+    _hidden  = {"Unit 8: 表示世界", "BC Toolkit"}
+    _bc_only = {"7.3","8.1","8.2","Bridge-R1","8.X","B1"}
+    return {
+        uname: {k:v for k,v in concepts.items() if v not in _bc_only}
+        for uname, concepts in UNITS.items()
+        if uname not in _hidden
+    }
+
+
 CONCEPT_CONSTRAINTS = {
     # ── Unit 1 ──────────────────────────────────────────
     "1.1": "Ensure student builds intuition numerically/graphically before algebra. "
@@ -897,18 +912,8 @@ with st.sidebar:
     st.divider()
 
 
-def _filtered_UNITS():
-    _track = st.session_state.get("student_track", "AB")
-    if _track == "BC":
-        return UNITS
-    _hidden  = {"Unit 8: 表示世界", "BC Toolkit"}
-    _bc_only = {"7.3","8.1","8.2","Bridge-R1","8.X","B1"}
-    return {
-        uname: {k:v for k,v in concepts.items() if v not in _bc_only}
-        for uname, concepts in UNITS.items()
-        if uname not in _hidden
-    }
 
+with st.sidebar:
     # Unit / Concept 两级选择
     selected_unit = st.selectbox(
         L["select_unit"], list(_filtered_UNITS().keys()),
