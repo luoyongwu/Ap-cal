@@ -674,13 +674,22 @@ CROSS-UNIT: confirm substitution was tried and failed before any IBP.
 4. EWM-B1B (lost minus sign): student drops minus in uv - integral v du.
    Intercept: 'Write d(uv)/dx first. Rearrange to isolate integral u(dv/dx)dx.
    Where does the minus sign appear, and why?'
-5. EWM-B1C (infinite loop without recognition): student applies IBP twice and
+5. EWM-B1C — SINGLE-ROUND TUNNEL VISION: student executes one round
+   of IBP correctly but stops when the resulting integral still requires
+   integration, saying 'I cannot simplify this further.'
+   Do not interrupt. After student halts, ask: 'Is this new integral
+   simpler than where you started, even if it still needs work?
+   Could the same technique apply again?'
+   Bridge: 'When differentiating x-squared times e-to-the-x, how many
+   times did we apply the product rule? Some integrals need more than
+   one pass of the same technique.'
+6. EWM-B1D (infinite loop without recognition): student applies IBP twice and
    returns to original integral without recognizing the opportunity.
    Do not interrupt. After two rounds: 'You now have the original integral on
    both sides. Treat it as an unknown variable. What algebraic move follows?'
-6. SUBSTITUTION FIRST: IBP is never the first tool tried. Always ask: 'Is there
+7. SUBSTITUTION FIRST: IBP is never the first tool tried. Always ask: 'Is there
    a substitution that would work here? Why does it fail?'
-7. Tabular Integration is not part of B1 (does not meet Toolkit Inclusion Rule:
+8. Tabular Integration is not part of B1 (does not meet Toolkit Inclusion Rule:
    no new cognitive structure, no new EWM, no Socratic guidance needed).""",
 
 }
@@ -1148,57 +1157,58 @@ with st.sidebar:
 # ══════════════════════════════════════════════════════════
 
 COGNITIVE_SCHEMA_VOCABULARY = {
-    "representation_shift",
-    "variable_separation",
-    "approximation_thinking",
-    "flow_vs_state",
-    "limit_process",
-    "physical_semantic",
-    "equilibrium_thinking",
-    "product_reversal",
+    "RepresentationShift",      # 坐标系/变量空间切换（5.4, 8.1, 8.2）
+    "VariableSpaceSeparation",  # 变量世界分离（7.2）
+    "ApproximationThinking",    # ≈ 而非 = 的认识论（7.3, 9.X）
+    "EquilibriumReasoning",     # 稳态与平衡分析（7.4）
+    "FlowReasoning",            # 区分状态与变化率（7.X）
+    "LocalToGlobalReasoning",   # 无限过程与极限（1.X, 9.X）
+    "FunctionComposition",      # 复合函数/链式结构（3.1, 8.1）
+    "AccumulationReasoning",    # 物理量累积的直觉（5.5）
+    "ProductRuleReversal",      # 乘积法则逆用（B1 IBP）
 }
 
 CONCEPT_METADATA = {
-    "1.1": {"concept_id":"1.1","track":["AB","BC"],"prerequisites":[],                          "cognitive_dependencies":["limit_process"]},
-    "1.2": {"concept_id":"1.2","track":["AB","BC"],"prerequisites":["1.1"],                      "cognitive_dependencies":["limit_process"]},
-    "1.3": {"concept_id":"1.3","track":["AB","BC"],"prerequisites":["1.1","1.2"],                "cognitive_dependencies":["limit_process"]},
-    "1.4": {"concept_id":"1.4","track":["AB","BC"],"prerequisites":["1.1","1.2"],                "cognitive_dependencies":["limit_process"]},
-    "1.X": {"concept_id":"1.X","track":["AB","BC"],"prerequisites":["1.1","1.2","1.3","1.4"],   "cognitive_dependencies":["limit_process"]},
-    "2.1": {"concept_id":"2.1","track":["AB","BC"],"prerequisites":["1.1","1.2"],                "cognitive_dependencies":["flow_vs_state"]},
-    "2.2": {"concept_id":"2.2","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["flow_vs_state"]},
+    "1.1": {"concept_id":"1.1","track":["AB","BC"],"prerequisites":[],                          "cognitive_dependencies":["LocalToGlobalReasoning"]},
+    "1.2": {"concept_id":"1.2","track":["AB","BC"],"prerequisites":["1.1"],                      "cognitive_dependencies":["LocalToGlobalReasoning"]},
+    "1.3": {"concept_id":"1.3","track":["AB","BC"],"prerequisites":["1.1","1.2"],                "cognitive_dependencies":["LocalToGlobalReasoning"]},
+    "1.4": {"concept_id":"1.4","track":["AB","BC"],"prerequisites":["1.1","1.2"],                "cognitive_dependencies":["LocalToGlobalReasoning"]},
+    "1.X": {"concept_id":"1.X","track":["AB","BC"],"prerequisites":["1.1","1.2","1.3","1.4"],   "cognitive_dependencies":["LocalToGlobalReasoning"]},
+    "2.1": {"concept_id":"2.1","track":["AB","BC"],"prerequisites":["1.1","1.2"],                "cognitive_dependencies":["FlowReasoning"]},
+    "2.2": {"concept_id":"2.2","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["FlowReasoning"]},
     "2.3": {"concept_id":"2.3","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":[]},
     "2.4": {"concept_id":"2.4","track":["AB","BC"],"prerequisites":["2.1","2.2"],                "cognitive_dependencies":[]},
-    "2.X": {"concept_id":"2.X","track":["AB","BC"],"prerequisites":["2.1","2.2","2.3","2.4"],   "cognitive_dependencies":["flow_vs_state"]},
-    "3.1": {"concept_id":"3.1","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["representation_shift"]},
-    "3.2": {"concept_id":"3.2","track":["AB","BC"],"prerequisites":["3.1"],                      "cognitive_dependencies":["representation_shift"]},
+    "2.X": {"concept_id":"2.X","track":["AB","BC"],"prerequisites":["2.1","2.2","2.3","2.4"],   "cognitive_dependencies":["FlowReasoning"]},
+    "3.1": {"concept_id":"3.1","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["RepresentationShift"]},
+    "3.2": {"concept_id":"3.2","track":["AB","BC"],"prerequisites":["3.1"],                      "cognitive_dependencies":["RepresentationShift"]},
     "3.3": {"concept_id":"3.3","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":[]},
-    "3.4": {"concept_id":"3.4","track":["AB","BC"],"prerequisites":["3.1"],                      "cognitive_dependencies":["representation_shift"]},
-    "3.5": {"concept_id":"3.5","track":["BC"],     "prerequisites":["3.1"],                      "cognitive_dependencies":["representation_shift"]},
+    "3.4": {"concept_id":"3.4","track":["AB","BC"],"prerequisites":["3.1"],                      "cognitive_dependencies":["RepresentationShift"]},
+    "3.5": {"concept_id":"3.5","track":["BC"],     "prerequisites":["3.1"],                      "cognitive_dependencies":["RepresentationShift"]},
     "3.X": {"concept_id":"3.X","track":["AB","BC"],"prerequisites":["3.1","3.2","3.3","3.4"],   "cognitive_dependencies":[]},
-    "4.1": {"concept_id":"4.1","track":["AB","BC"],"prerequisites":["2.1","3.1"],                "cognitive_dependencies":["flow_vs_state"]},
-    "4.2": {"concept_id":"4.2","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["flow_vs_state"]},
-    "4.3": {"concept_id":"4.3","track":["AB","BC"],"prerequisites":["3.1"],                      "cognitive_dependencies":["flow_vs_state"]},
-    "4.4": {"concept_id":"4.4","track":["AB","BC"],"prerequisites":["2.1","2.3"],                "cognitive_dependencies":["flow_vs_state"]},
-    "4.5": {"concept_id":"4.5","track":["AB","BC"],"prerequisites":["2.1","3.1"],                "cognitive_dependencies":["approximation_thinking"]},
+    "4.1": {"concept_id":"4.1","track":["AB","BC"],"prerequisites":["2.1","3.1"],                "cognitive_dependencies":["FlowReasoning"]},
+    "4.2": {"concept_id":"4.2","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["FlowReasoning"]},
+    "4.3": {"concept_id":"4.3","track":["AB","BC"],"prerequisites":["3.1"],                      "cognitive_dependencies":["FlowReasoning"]},
+    "4.4": {"concept_id":"4.4","track":["AB","BC"],"prerequisites":["2.1","2.3"],                "cognitive_dependencies":["FlowReasoning"]},
+    "4.5": {"concept_id":"4.5","track":["AB","BC"],"prerequisites":["2.1","3.1"],                "cognitive_dependencies":["ApproximationThinking"]},
     "4.X": {"concept_id":"4.X","track":["AB","BC"],"prerequisites":["4.1","4.2","4.3","4.4","4.5"],"cognitive_dependencies":[]},
     "5.1": {"concept_id":"5.1","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":[]},
-    "5.2": {"concept_id":"5.2","track":["AB","BC"],"prerequisites":["1.2","5.1"],                "cognitive_dependencies":["limit_process","approximation_thinking"]},
-    "5.3": {"concept_id":"5.3","track":["AB","BC"],"prerequisites":["5.1","3.1"],                "cognitive_dependencies":["representation_shift"]},
-    "5.4": {"concept_id":"5.4","track":["AB","BC"],"prerequisites":["5.1","3.1"],                "cognitive_dependencies":["representation_shift","variable_separation"]},
-    "5.5": {"concept_id":"5.5","track":["AB","BC"],"prerequisites":["5.2","5.3"],                "cognitive_dependencies":["physical_semantic"]},
+    "5.2": {"concept_id":"5.2","track":["AB","BC"],"prerequisites":["1.2","5.1"],                "cognitive_dependencies":["LocalToGlobalReasoning","ApproximationThinking"]},
+    "5.3": {"concept_id":"5.3","track":["AB","BC"],"prerequisites":["5.1","3.1"],                "cognitive_dependencies":["RepresentationShift"]},
+    "5.4": {"concept_id":"5.4","track":["AB","BC"],"prerequisites":["5.1","3.1"],                "cognitive_dependencies":["RepresentationShift","VariableSpaceSeparation"]},
+    "5.5": {"concept_id":"5.5","track":["AB","BC"],"prerequisites":["5.2","5.3"],                "cognitive_dependencies":["AccumulationReasoning"]},
     "5.X": {"concept_id":"5.X","track":["AB","BC"],"prerequisites":["5.1","5.2","5.3","5.4","5.5"],"cognitive_dependencies":[]},
-    "6.1": {"concept_id":"6.1","track":["AB","BC"],"prerequisites":["5.2","5.3"],                "cognitive_dependencies":["representation_shift"]},
+    "6.1": {"concept_id":"6.1","track":["AB","BC"],"prerequisites":["5.2","5.3"],                "cognitive_dependencies":["RepresentationShift"]},
     "6.2": {"concept_id":"6.2","track":["AB","BC"],"prerequisites":["6.1"],                      "cognitive_dependencies":[]},
     "6.3": {"concept_id":"6.3","track":["AB","BC"],"prerequisites":["5.2","5.3"],                "cognitive_dependencies":[]},
     "6.X": {"concept_id":"6.X","track":["AB","BC"],"prerequisites":["6.1","6.2","6.3"],          "cognitive_dependencies":[]},
-    "7.1": {"concept_id":"7.1","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["flow_vs_state"]},
-    "7.2": {"concept_id":"7.2","track":["AB","BC"],"prerequisites":["3.1","5.1"],                "cognitive_dependencies":["variable_separation","flow_vs_state"]},
-    "7.3": {"concept_id":"7.3","track":["BC"],     "prerequisites":["7.1","7.2"],                "cognitive_dependencies":["approximation_thinking","flow_vs_state"]},
-    "7.4": {"concept_id":"7.4","track":["AB","BC"],"prerequisites":["7.2"],                      "cognitive_dependencies":["flow_vs_state","equilibrium_thinking","physical_semantic"]},
+    "7.1": {"concept_id":"7.1","track":["AB","BC"],"prerequisites":["2.1"],                      "cognitive_dependencies":["FlowReasoning"]},
+    "7.2": {"concept_id":"7.2","track":["AB","BC"],"prerequisites":["3.1","5.1"],                "cognitive_dependencies":["VariableSpaceSeparation","FlowReasoning"]},
+    "7.3": {"concept_id":"7.3","track":["BC"],     "prerequisites":["7.1","7.2"],                "cognitive_dependencies":["ApproximationThinking","FlowReasoning"]},
+    "7.4": {"concept_id":"7.4","track":["AB","BC"],"prerequisites":["7.2"],                      "cognitive_dependencies":["FlowReasoning","EquilibriumReasoning","AccumulationReasoning"]},
     "7.X": {"concept_id":"7.X","track":["AB","BC"],"prerequisites":["7.1","7.2","7.4"],          "cognitive_dependencies":[]},
-    "8.1": {"concept_id":"8.1","track":["BC"],     "prerequisites":["3.1","3.5","5.2"],          "cognitive_dependencies":["representation_shift"]},
-    "8.2": {"concept_id":"8.2","track":["BC"],     "prerequisites":["5.2","6.1"],                "cognitive_dependencies":["representation_shift"]},
-    "Bridge-R1": {"concept_id":"Bridge-R1","track":["BC"],"prerequisites":["5.4","8.1","8.2"],  "cognitive_dependencies":["representation_shift"]},
-    "8.X": {"concept_id":"8.X","track":["BC"],     "prerequisites":["8.1","8.2"],               "cognitive_dependencies":["representation_shift"]},
-    "B1":  {"concept_id":"B1", "track":["BC"],     "prerequisites":["5.1","5.4","3.3"],          "cognitive_dependencies":["product_reversal"]},
+    "8.1": {"concept_id":"8.1","track":["BC"],     "prerequisites":["3.1","3.5","5.2"],          "cognitive_dependencies":["RepresentationShift"]},
+    "8.2": {"concept_id":"8.2","track":["BC"],     "prerequisites":["5.2","6.1"],                "cognitive_dependencies":["RepresentationShift"]},
+    "Bridge-R1": {"concept_id":"Bridge-R1","track":["BC"],"prerequisites":["5.4","8.1","8.2"],  "cognitive_dependencies":["RepresentationShift"]},
+    "8.X": {"concept_id":"8.X","track":["BC"],     "prerequisites":["8.1","8.2"],               "cognitive_dependencies":["RepresentationShift"]},
+    "B1":  {"concept_id":"B1", "track":["BC"],     "prerequisites":["5.1","5.4","3.3"],          "cognitive_dependencies":["ProductRuleReversal"]},
 }
