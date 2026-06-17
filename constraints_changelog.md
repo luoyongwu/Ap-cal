@@ -51,3 +51,81 @@
 - 已知瑕疵（待精修·体验层）：开题指令措辞泄漏到学生界面
   （5.4"不得求值"、6.X"按照规则"、6.1"根据教学要求"）
 - 结论：Unit 5/6 部署验收通过；三大高危陷阱（5.4/5.3/6.2）实战确认
+
+## #5 · 2026-06-16 · 新增（部署）——认知课程架构重构
+
+### 动机
+Unit 7/8/BC Toolkit 的部署标志着 Luo-cal 从"教材内容组织"升级为"认知世界模型驱动的课程架构"，是项目历史上最重要的一次范式迁移。
+
+### 修改内容
+三表同步新增（UNITS / CONCEPT_CONSTRAINTS / OPENING_PROMPTS）：
+- Unit 7（微分方程）：7.1–7.4 + 7.X，AB/BC 双轨
+- Unit 8（表示世界）：8.1、8.2、Bridge-R1（首个非课程元概念）+ 8.X，BC only
+- BC Toolkit：B1 分部积分法，独立命名空间，不使用 Unit 编号
+- AB/BC 学生轨道切换（student_track + _filtered_UNITS() 过滤函数）
+- CONCEPT_METADATA 全量元数据（Unit 1–8 + B1，含 prerequisites + cognitive_dependencies）
+- COGNITIVE_SCHEMA_VOCABULARY 第一版词汇表冻结（8 个认知图式标签）
+
+### 新确立架构原则
+- Toolkit Inclusion Rule：进入 Toolkit 必须满足（A）引入新认知结构，（B）引入新错误世界，（C）需要独立苏格拉底引导。计算捷径不进。
+- Shared World Principle：AB/BC 综合题共用情境（同一物理世界），不共用技能树。分流的是认知深度，不是现实世界。
+- Bridge-R1 里程碑：系统首次部署非课程元概念，编码 5.4/8.1/8.2 的共同认知根因（RepresentationShift Error）。
+
+### 认知世界模型（正式确立）
+| 世界模型 | 覆盖 | 核心命题 |
+|---------|------|---------|
+| FWM 流世界 | Unit 7 | 微分方程描述状态如何变化，而非函数本身 |
+| RWM 表示世界 | Unit 8 | 同一对象，不同坐标系表示 |
+| AWM 近似世界 | Unit 9（待） | 函数 ≈ 越来越好的多项式 |
+
+### 双轨叙述
+
+**【学术轨】** FWM/RWM 的组织原则是认知图式而非知识内容。Unit 7 四概念在教材中分散于不同章节，在 Luo-cal 中被同一 EWM 根因统一：学生将"状态描述"（y=f(x)）与"变化率描述"（dy/dx=f(x,y)）混淆。RWM 同理——5.4、8.1、8.2 在物理内容上相隔数百页，但共享 RepresentationShift 这一认知依赖。这正是论文核心论断的实证基础："传统课程按知识内容组织；认知层课程按误解结构组织。"
+
+**【用户轨】** 你学斜率场、欧拉法、增长模型，感觉像在学三件不同的事。Luo-cal 看到的是同一件事的三个侧面——"这个方程在说 y 会怎么变"。它在你进入每个新概念的第一秒，都会先问你这个根本问题，然后才允许你动笔。当你在极坐标面积题里用了矩形切片，它会问你："你现在在哪个坐标世界里？"——这和一个月前它在换元积分里问你的，是同一个问题。它记得。
+
+### 验证结果
+- 冒烟：Unit 7/8/BC Toolkit 全部概念菜单正确渲染 ✅
+- AB 过滤：AB 模式不见 Unit 8 + BC Toolkit ✅
+- BC 过滤：BC 模式全显 Unit 8 + BC Toolkit + Unit 7.3 ✅
+- FWM 实测：7.1 首问"建立流向世界观"落地 ✅
+- CONCEPT_METADATA：29 个概念元数据写入，cognitive_dependencies 待升级为 v2 词汇表
+
+---
+
+## #6 · 2026-06-16 · 紧急修复——侧边栏代码吸收事故
+
+### 事故描述
+过滤函数 _filtered_UNITS() 被插入 with st.sidebar: 块内部，def 语句退出了 with 块，导致侧边栏全部 UI 代码（selected_unit、selected_concept、show_test）被吸入函数体成为死代码。
+错误表现：NameError: name 'show_test' is not defined
+
+### 根本原因
+插入点锚定于「# Unit / Concept」（缩进4格，位于 with st.sidebar: 内），而 def 在列0，退出了上层 with 块。py_compile 通过（语法合法但语义错误），未被闸门拦截。
+
+### 修复方案
+1. 以行号定位识别函数体 vs 吸收代码边界（弃用文字标记锚点）
+2. 将 _filtered_UNITS() 移至模块级（CONCEPT_CONSTRAINTS 之前）
+3. 将被吸收的侧边栏代码用新 with st.sidebar: 块重新包裹
+
+### 新防线规则
+函数定义插入前须验证锚点缩进层级；凡锚点在 with 块内，函数必须插到该 with 块外的模块级位置。py_compile 不能替代语义层审计。
+
+---
+
+## #7 · 2026-06-16 · 紧急修复——Anthropic 模型弃用
+
+### 事件
+Anthropic 正式停止 claude-sonnet-4-20250514 的原生 API 支持，所有请求返回 NotFoundError 404 model not found，影响全部概念。
+
+### 修复
+AnthropicAdapter.MODEL 从 "claude-sonnet-4-20250514" 升级为 "claude-sonnet-4-6"（Anthropic 官方推荐路径）。
+
+### 影响评估
+- Sonnet 4.6 与原版性能等价，价格不变，无需修改提示词
+- 未来：Unit 9 密集推理任务可考虑局部引入 Opus 4.8
+
+### 双轨叙述
+
+**【学术轨】** 模型弃用事件揭示了 Luo-cal 架构的一个优势：认知层约束编码在系统提示词（CONCEPT_CONSTRAINTS）而非模型权重中，因此模型升级不影响任何教学逻辑，仅需修改一行模型字符串。这验证了"约束在语义层，不在模型层"的架构原则。
+
+**【用户轨】** Anthropic 把旧版 AI 关掉了，换了个更好的新版本。你什么都不用做——Luo-cal 的教学逻辑、所有题目、所有引导方式全部原封不动，只是底层的 AI 引擎升级了。好的教学设计不依赖某一个特定的 AI 模型。
