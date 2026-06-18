@@ -1,3 +1,5 @@
+import os
+DISABLE_SCL = os.environ.get("DISABLE_SCL", "0") == "1"
 
 import streamlit as st
 from anthropic import Anthropic
