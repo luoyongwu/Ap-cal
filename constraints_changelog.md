@@ -144,3 +144,13 @@ AnthropicAdapter.MODEL 从 "claude-sonnet-4-20250514" 升级为 "claude-sonnet-4
 
 ### 确立惯例
 今后每次新增 EWM，当日完成对应探针验收并写入 changelog。
+
+## [2026-06-18] Add DISABLE_SCL ablation switch
+
+**触发场景:** 需要对 SCL（Socratic Constraint Layer）做消融测试，验证其对学习效果的贡献。
+
+**修改内容:** 在 app.py 顶部注入环境变量开关 `DISABLE_SCL`。
+
+**Before:** 无开关，SCL 始终启用。
+
+**After:** `DISABLE_SCL=1` 时完全绕过 SCL 拦截逻辑，其余行为不变。
