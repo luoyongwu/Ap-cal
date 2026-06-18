@@ -22,7 +22,7 @@ class AnthropicAdapter:
         return r.content[0].text
 
 class DeepSeekAdapter:
-    MODEL = "deepseek-chat"
+    MODEL = "deepseek-v4-pro"
     def __init__(self, api_key):
         from openai import OpenAI
         self.client = OpenAI(
