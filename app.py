@@ -906,6 +906,14 @@ with st.sidebar:
                     st.session_state.key_confirmed = True
             except (KeyError, FileNotFoundError):
                 pass
+            elif new_backend == "deepseek":
+                try:
+                    secrets_key = st.secrets["DEEPSEEK_API_KEY"]
+                    if secrets_key and secrets_key.startswith("sk-"):
+                        st.session_state.api_key = secrets_key
+                        st.session_state.key_confirmed = True
+                except (KeyError, FileNotFoundError):
+                    pass
         st.rerun()
 
     st.divider()
