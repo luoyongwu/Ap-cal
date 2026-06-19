@@ -880,14 +880,14 @@ with st.sidebar:
         st.session_state.key_confirmed = False
         st.session_state.api_key = ""
         st.session_state.messages = []
-        if new_backend == "anthropic":
-            try:
-                secrets_key = st.secrets["ANTHROPIC_API_KEY"]
-                if secrets_key and secrets_key.startswith("sk-"):
-                    st.session_state.api_key = secrets_key
-                    st.session_state.key_confirmed = True
-            except (KeyError, FileNotFoundError):
-                pass
+            if new_backend == "anthropic":
+                try:
+                    secrets_key = st.secrets["ANTHROPIC_API_KEY"]
+                    if secrets_key and secrets_key.startswith("sk-"):
+                        st.session_state.api_key = secrets_key
+                        st.session_state.key_confirmed = True
+                except (KeyError, FileNotFoundError):
+                    pass
             elif new_backend == "deepseek":
                 try:
                     secrets_key = st.secrets["DEEPSEEK_API_KEY"]
@@ -896,7 +896,7 @@ with st.sidebar:
                         st.session_state.key_confirmed = True
                 except (KeyError, FileNotFoundError):
                     pass
-        st.rerun()
+            st.rerun()
 
     st.divider()
 
