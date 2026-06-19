@@ -857,24 +857,6 @@ for k, v in {
         st.session_state[k] = v
 
 # ── 自动加载 Secrets ──────────────────────────────────────
-# FIX: 加载成功后立即 rerun，确保状态在首次渲染后立即生效
-if not st.session_state.key_confirmed:
-    try:
-        secrets_key = st.secrets["ANTHROPIC_API_KEY"]
-        if secrets_key and secrets_key.startswith("sk-"):
-            st.session_state.api_key = secrets_key
-            st.session_state.key_confirmed = True
-            elif new_backend == "deepseek":
-                try:
-                    secrets_key = st.secrets["DEEPSEEK_API_KEY"]
-                    if secrets_key and secrets_key.startswith("sk-"):
-                        st.session_state.api_key = secrets_key
-                        st.session_state.key_confirmed = True
-                except (KeyError, FileNotFoundError):
-                    pass
-            st.rerun()
-    except (KeyError, FileNotFoundError):
-        pass
 
 L = LANG_LABELS[st.session_state.lang]
 
