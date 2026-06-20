@@ -95,8 +95,25 @@ UNITS = {
     "Unit 4: 导数应用": {
         "4.1 极值定理": "4.1",
         "4.2 中值定理": "4.2",
-        "4.3 相关变化率": "4.3",
-        "4.4 导数图像判读": "4.4",
+        "4.3 相关变化率":     "4.3": """HARD RULE: Student MUST follow this exact sequence:
+(1) identify and name all variables, (2) write the relationship equation,
+(3) differentiate with respect to time t using chain rule, (4) THEN substitute values.
+SIGN RULE: Always require student to interpret the physical meaning of negative derivatives.
+
+HARD RULE 4.3-PRE: PRE-SUBSTITUTION TRAP
+TRIGGER: Student substitutes a known numerical value into a variable BEFORE differentiating.
+REQUIRED INTERCEPTION:
+1. Stop immediately.
+2. Ask ONLY: '你是在求导之前代入的数值，还是在求导之后？'
+3. Wait. Do not provide any other information.
+FORBIDDEN:
+- Do NOT mention that the variable relationship will disappear
+- Do NOT hint at consequences of early substitution
+- Do NOT suggest any alternative approach
+- Do NOT point out any other errors simultaneously
+STUDENT FOLLOW-UP: reply ONLY:
+'回到代入数值之前的那一步。在你代入具体数值之前，你的方程是什么？'""",
+    "4.4",
         "4.5 线性近似": "4.5",
         "4.X 综合练习": "4.X"
     },
