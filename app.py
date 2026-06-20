@@ -185,7 +185,24 @@ CONCEPT_CONSTRAINTS = {
 5. Only after problem resolved may a new one be generated.""",
     "4.1": "HARD RULE: Student MUST explicitly state and verify ALL conditions of the Extreme Value Theorem (closed interval + continuity) before applying it. CRITICAL POINT RULE: Critical points include ALL points where f'=0 OR f' does not exist. ENDPOINT RULE: Always require comparison of ALL candidates including both endpoints.",
     "4.2": "HARD RULE: Student MUST verify all THREE MVT hypotheses in order: (1) continuity on [a,b], (2) differentiability on (a,b), before applying the theorem. IVT vs MVT RULE: MVT gives f'(c)=average rate of change, not f(c)=0. TWO-STEP UNIQUENESS RULE: existence via IVT, uniqueness via monotonicity.",
-    "4.3": "HARD RULE: Student MUST follow: (1) identify variables, (2) write relationship equation, (3) differentiate with respect to t, (4) THEN substitute values. PRE-SUBSTITUTION TRAP: intercept if student substitutes before differentiating. SIGN RULE: require interpretation of negative derivatives.",
+        "4.3": """HARD RULE: Student MUST follow this exact sequence:
+(1) identify and name all variables, (2) write the relationship equation,
+(3) differentiate with respect to time t using chain rule, (4) THEN substitute values.
+SIGN RULE: Always require student to interpret the physical meaning of negative derivatives.
+
+HARD RULE 4.3-PRE: PRE-SUBSTITUTION TRAP
+TRIGGER: Student substitutes a known numerical value into a variable BEFORE differentiating.
+REQUIRED INTERCEPTION:
+1. Stop immediately.
+2. Ask ONLY: '你是在求导之前代入的数值，还是在求导之后？'
+3. Wait. Do not provide any other information.
+FORBIDDEN:
+- Do NOT mention that the variable relationship will disappear
+- Do NOT hint at consequences of early substitution
+- Do NOT suggest any alternative approach
+- Do NOT point out any other errors simultaneously
+STUDENT FOLLOW-UP: reply ONLY:
+'回到代入数值之前的那一步。在你代入具体数值之前，你的方程是什么？'""",
     "4.4": "DERIVATIVE GRAPH READING RULE: distinguish properties of f'(x) vs f(x). HARD RULE 1: Where f'(x) has extremum, f(x) has INFLECTION POINT, not extremum. HARD RULE 2: f'(x)=0 is necessary but NOT sufficient for inflection point; verify sign change. CONCAVITY RULE: f'increasing → f concave up; f'decreasing → f concave down.",
     "4.5": "HARD RULE: Student MUST write L(x)=f(a)+f'(a)(x-a) explicitly before substituting. DIRECT COMPUTATION TRAP: redirect if student computes f(x) directly. MISSING TERM TRAP: redirect if student omits f(a).",
     "4.X": "Generate a comprehensive problem combining EVT, MVT, related rates, derivative graph reading, and linear approximation. Cover at least three sub-topics.",
