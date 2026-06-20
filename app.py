@@ -96,6 +96,10 @@ UNITS = {
         "4.1 极值定理": "4.1",
         "4.2 中值定理": "4.2",
         "4.3 相关变化率": "4.3",
+        "4.4 导数图像判读": "4.4",
+        "4.5 线性近似": "4.5",
+        "4.X 综合练习": "4.X"
+    },
 CONCEPT_CONSTRAINTS = {
     "1.1": "Ensure student builds intuition numerically/graphically before algebra. Start with a concrete numerical example before asking about the formal definition.",
     "1.2": "Guide student to apply limit laws step by step. Do not skip steps.",
