@@ -95,72 +95,7 @@ UNITS = {
     "Unit 4: 导数应用": {
         "4.1 极值定理": "4.1",
         "4.2 中值定理": "4.2",
-        "4.3 相关变化率":     "4.3": """HARD RULE: Student MUST follow this exact sequence:
-(1) identify and name all variables, (2) write the relationship equation,
-(3) differentiate with respect to time t using chain rule, (4) THEN substitute values.
-SIGN RULE: Always require student to interpret the physical meaning of negative derivatives.
-
-HARD RULE 4.3-PRE: PRE-SUBSTITUTION TRAP
-TRIGGER: Student substitutes a known numerical value into a variable BEFORE differentiating.
-REQUIRED INTERCEPTION:
-1. Stop immediately.
-2. Ask ONLY: '你是在求导之前代入的数值，还是在求导之后？'
-3. Wait. Do not provide any other information.
-FORBIDDEN:
-- Do NOT mention that the variable relationship will disappear
-- Do NOT hint at consequences of early substitution
-- Do NOT suggest any alternative approach
-- Do NOT point out any other errors simultaneously
-STUDENT FOLLOW-UP: reply ONLY:
-'回到代入数值之前的那一步。在你代入具体数值之前，你的方程是什么？'""",
-    "4.4",
-        "4.5 线性近似": "4.5",
-        "4.X 综合练习": "4.X"
-    },
-    "Unit 5: 积分": {
-        "5.1 不定积分与原函数": "5.1",
-        "5.2 黎曼和与定积分": "5.2",
-        "5.3 微积分基本定理": "5.3",
-        "5.4 换元积分法": "5.4",
-        "5.5 净变化量与运动问题": "5.5",
-        "5.X 综合练习": "5.X"
-    },
-    "Unit 6: 积分应用": {
-        "6.1 两曲线间面积": "6.1",
-        "6.2 旋转体与已知截面体积": "6.2",
-        "6.3 函数平均值与积分中值定理": "6.3",
-        "6.X 综合练习": "6.X"
-    },
-    "Unit 7: 微分方程": {
-        "7.1 斜率场与方向场":    "7.1",
-        "7.2 可分离变量微分方程": "7.2",
-        "7.3 欧拉折线法 (BC)":  "7.3",
-        "7.4 增长模型":          "7.4",
-        "7.X 综合练习":          "7.X",
-    },
-    "Unit 8: 表示世界": {
-        "8.1 参数方程与运动":    "8.1",
-        "8.2 极坐标面积与弧长":  "8.2",
-        "Bridge-R1 表示转换":   "Bridge-R1",
-        "8.X 综合练习":          "8.X",
-    },
-    "BC Toolkit": {
-        "B1 分部积分法": "B1",
-    },
-}
-
-def _filtered_UNITS():
-    _track = st.session_state.get("student_track", "AB")
-    if _track == "BC":
-        return UNITS
-    _hidden  = {"Unit 8: 表示世界", "BC Toolkit"}
-    _bc_only = {"7.3","8.1","8.2","Bridge-R1","8.X","B1"}
-    return {
-        uname: {k:v for k,v in concepts.items() if v not in _bc_only}
-        for uname, concepts in UNITS.items()
-        if uname not in _hidden
-    }
-
+        "4.3 相关变化率": "4.3",
 CONCEPT_CONSTRAINTS = {
     "1.1": "Ensure student builds intuition numerically/graphically before algebra. Start with a concrete numerical example before asking about the formal definition.",
     "1.2": "Guide student to apply limit laws step by step. Do not skip steps.",
