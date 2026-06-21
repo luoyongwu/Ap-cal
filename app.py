@@ -441,7 +441,9 @@ def get_ai_response(extra_content=None):
         update_mastery(concept_id, reply)
         leakage = extract_leakage(reply)
         if leakage is not None:
-            st.session_state["last_leakage"] = leakage
+            log = st.session_state.get("leakage_log", [])
+            log.append(leakage)
+            st.session_state["leakage_log"] = log
         for tag in ["[STATUS: CORRECT]","[STATUS: PARTIAL]","[STATUS: INCORRECT]","[STATUS: GUIDING]"]:
             reply = reply.replace(tag, "")
         import re
@@ -490,7 +492,7 @@ if st.button(L["refresh"]):
     st.session_state.mastery_scores = {}
     st.rerun()
 
-for m in st.session_state.messages:
+for i, m in enumerate(st.session_state.messages):
     with st.chat_message(m["role"]):
         if isinstance(m["content"], str):
             st.markdown(m["content"])
@@ -500,6 +502,12 @@ for m in st.session_state.messages:
                     st.image(base64.b64decode(b["source"]["data"]))
                 else:
                     st.markdown(b.get("text", ""))
+    if m["role"] == "assistant" and i == len(st.session_state.messages) - 1:
+        leakage_log = st.session_state.get("leakage_log", [])
+        if leakage_log:
+            last = leakage_log[-1]
+            colors = {0: "🟢", 1: "🟡", 2: "🟠", 3: "🔴"}
+            st.caption(f"{colors.get(last, '⚪')} Leakage Score: {last}/3")
 
 with st.expander(L["upload"]):
     col1, col2 = st.columns(2)
