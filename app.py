@@ -128,20 +128,25 @@ CONCEPT_CONSTRAINTS = {
     "3.X": "HARD RULE: Generate ONE problem combining at least TWO Unit 3 skills. Maximum 2 sub-questions. First question: Which method and why? Never choose starting point for student.",
     "4.1": "HARD RULE: Student MUST state ALL EVT conditions before applying. Critical points include where f prime is zero OR undefined. Always compare all candidates including endpoints.",
     "4.2": "HARD RULE: Verify all THREE MVT hypotheses in order. IVT vs MVT: MVT gives f prime(c) equals average rate of change, not f(c)=0. Existence via IVT, uniqueness via monotonicity.",
-    "4.3": ("HARD RULE: Student MUST follow exact sequence: "
+    "4.3": ("HARD RULE [LAYER: PROBLEM_SOLVING]: Student MUST follow exact sequence: "
             "(1) identify variables, (2) write relationship equation, "
             "(3) differentiate with respect to t, (4) THEN substitute values. "
             "SIGN RULE: Require interpretation of negative derivatives. "
-            "HARD RULE 4.3-PRE PRE-SUBSTITUTION TRAP: "
-            "If student substitutes numerical value into variable BEFORE differentiating, "
-            "STOP immediately and ask ONLY this: "
-            "Did you substitute the value before or after differentiating? "
-            "Wait for answer. Do NOT mention variable relationship disappearing. "
-            "Do NOT hint at consequences. Do NOT suggest alternative approach. "
-            "Do NOT point out other errors. "
-            "If student asks what to do: reply ONLY: "
-            "Go back to before you substituted. What was your equation before substituting?"),
-    "4.4": "HARD RULE: Where f prime has extremum, f has INFLECTION POINT not extremum. f prime zero is necessary but NOT sufficient for inflection; verify sign change. f prime increasing means f concave up.",
+            "HARD RULE 4.3-PRE-OVERRIDE [HIGHEST PRIORITY - CROSS-LAYER]: "
+            "This rule overrides SINGLE-PROBLEM RULE and all other rules. "
+            "If student input contains substitution of a numerical value into a variable BEFORE differentiating, "
+            "BEFORE doing anything else - even before applying SINGLE-PROBLEM RULE - "
+            "you MUST immediately ask ONLY this one question: "
+            "'你是在求导之前代入的数值，还是在求导之后？/ "
+            "Did you substitute the numerical value before differentiating, or after?' "
+            "Do NOT list multiple problems. Do NOT ask student to choose. "
+            "Do NOT mention variable relationships disappearing. "
+            "Do NOT hint at consequences. Do NOT point out other errors. "
+            "Wait for answer to THIS question first. Only after student answers "
+            "may you proceed to SINGLE-PROBLEM RULE or any other rule. "
+            "STUDENT FOLLOW-UP: If student asks what to do, reply ONLY: "
+            "'回到代入数值之前的那一步。在你代入具体数值之前，你的方程是什么？'"),
+    "4.4": "HARD RULE: Where f prime has extremum, f has INFLECTION POINT not extremum. f prime zero is necessary but NOT sufficient for inflection; verify sign change.",
     "4.5": "HARD RULE: Student MUST write L(x)=f(a)+f prime(a)(x-a) before substituting. Redirect if student computes directly or omits f(a).",
     "4.X": "Generate comprehensive problem combining EVT, MVT, related rates, derivative graph reading, and linearization. Cover at least three sub-topics.",
     "5.1": "HARD RULE: Never accept antiderivative without +C. Geometric anchor: student must describe family of curves before computation.",
@@ -393,6 +398,11 @@ def update_mastery(concept_id, response_text):
         scores[concept_id] = 0
     if scores[concept_id] >= 3: st.session_state.mastery_ready = True
 
+def extract_leakage(response_text):
+    import re
+    match = re.search(r"\[LEAKAGE:\s*(\d)\]", response_text)
+    return int(match.group(1)) if match else None
+
 def generate_summary(concept_id):
     adapter = get_adapter()
     digest = "\n".join(
@@ -414,10 +424,14 @@ def get_ai_response(extra_content=None):
         f"You are a strict AP Calculus Socratic tutor. {L_local['lang_instr']} "
         f"NEVER give the answer directly. Always guide with questions. "
         f"TEACHING CONSTRAINT: {CONCEPT_CONSTRAINTS.get(concept_id, 'Guide step by step.')} "
-        f"\nRESPONSE FORMAT RULE: append exactly one tag at the very end: "
-        f"[STATUS: CORRECT], [STATUS: PARTIAL], [STATUS: INCORRECT], or [STATUS: GUIDING]. "
-        f"\nSINGLE-PROBLEM RULE: Only work on ONE problem at a time. "
-        f"If student submits multiple problems: list them, ask which to start with, wait.")
+        f"\nRESPONSE FORMAT RULE: You MUST append exactly these two tags at the very end, on separate lines: "
+        f"First: one of [STATUS: CORRECT], [STATUS: PARTIAL], [STATUS: INCORRECT], or [STATUS: GUIDING]. "
+        f"Second: [LEAKAGE: N] where N is 0, 1, 2, or 3. "
+        f"0=no leakage pure Socratic, 1=directional hint, 2=obvious hint toward answer, 3=equivalent to giving answer. "
+        f"No other text after these tags. "
+        f"\nSINGLE-PROBLEM RULE [LAYER: DIALOGUE_STRUCTURE]: Only work on ONE problem at a time. "
+        f"If student submits multiple problems: list them, ask which to start with, wait. "
+        f"EXCEPTION: If 4.3-PRE-OVERRIDE is triggered, execute it BEFORE this rule.")
     msgs = [{"role": m["role"], "content": m["content"]}
             for m in st.session_state.messages
             if isinstance(m.get("content"), (str, list))]
@@ -425,8 +439,13 @@ def get_ai_response(extra_content=None):
     with st.spinner(L_local["spinner"]):
         reply = adapter.chat(system_msg, msgs)
         update_mastery(concept_id, reply)
+        leakage = extract_leakage(reply)
+        if leakage is not None:
+            st.session_state["last_leakage"] = leakage
         for tag in ["[STATUS: CORRECT]","[STATUS: PARTIAL]","[STATUS: INCORRECT]","[STATUS: GUIDING]"]:
             reply = reply.replace(tag, "")
+        import re
+        reply = re.sub(r"\[LEAKAGE:\s*\d\]", "", reply)
         return reply.rstrip()
 
 L = LANG_LABELS[st.session_state.lang]
@@ -445,6 +464,9 @@ if show_test:
             with st.status(L["test_working"], expanded=True):
                 response = get_ai_response()
             st.session_state.messages.append({"role": "assistant", "content": response})
+            leakage = st.session_state.get("last_leakage")
+            if leakage is not None:
+                st.caption(f"🔬 Leakage Score: {leakage}/3")
             st.rerun()
         else:
             st.warning(L["test_empty"])
