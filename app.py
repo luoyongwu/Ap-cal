@@ -7,6 +7,25 @@ import base64
 
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
+class RailwayAdapter:
+    BACKEND_URL = "https://web-production-b86c5.up.railway.app"
+    def __init__(self):
+        pass
+    def chat(self, system, messages, max_tokens=500):
+        import urllib.request, json
+        last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        concept_id = st.session_state.get("concept_id", "unknown")
+        student_id = st.session_state.get("student_id", "streamlit_user")
+        payload = {"student_id": student_id, "concept_id": concept_id,
+                   "user_input": last_user, "session_id": "streamlit"}
+        req = urllib.request.Request(
+            f"{self.BACKEND_URL}/api/v1/chat",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req) as r:
+            result = json.loads(r.read())
+        return result.get("response", "")
+
 class AnthropicAdapter:
     MODEL = "claude-sonnet-4-6"
     def __init__(self, api_key):
@@ -47,6 +66,7 @@ def get_adapter():
     k = st.session_state.api_key
     if b == "anthropic": return AnthropicAdapter(k)
     elif b == "deepseek": return DeepSeekAdapter(k)
+    elif b == "railway": return RailwayAdapter()
     else: return OllamaAdapter()
 
 if "student_track" not in st.session_state:
@@ -345,6 +365,8 @@ with st.sidebar:
                     st.session_state.key_confirmed = True
             except (KeyError, FileNotFoundError): pass
         elif new_backend == "ollama":
+            st.session_state.key_confirmed = True
+        elif new_backend == "railway":
             st.session_state.key_confirmed = True
         st.rerun()
     st.divider()
