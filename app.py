@@ -59,6 +59,7 @@ BACKENDS = {
     "Anthropic (Claude)": "anthropic",
     "DeepSeek": "deepseek",
     "本地 Ollama (Gemma)": "ollama",
+    "🚀 Railway Backend": "railway",
 }
 
 def get_adapter():
