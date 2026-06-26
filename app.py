@@ -16,8 +16,10 @@ class RailwayAdapter:
         last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
         concept_id = st.session_state.get("concept_id", "unknown")
         student_id = st.session_state.get("student_id", "streamlit_user")
+        lang = "en" if st.session_state.get("lang", "zh") == "en" else "zh"
         payload = {"student_id": student_id, "concept_id": concept_id,
-                   "user_input": last_user, "session_id": "streamlit"}
+                   "user_input": last_user, "session_id": "streamlit",
+                   "language": lang}
         req = urllib.request.Request(
             f"{self.BACKEND_URL}/api/v1/chat",
             data=json.dumps(payload).encode(),
