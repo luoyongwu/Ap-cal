@@ -8,7 +8,7 @@ import base64
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
 class RailwayAdapter:
-    BACKEND_URL = "https://web-production-b86c5.up.railway.app"
+    BACKEND_URL = "https://web-production-7d98d.up.railway.app"
     def __init__(self):
         pass
     def chat(self, system, messages, max_tokens=500):
