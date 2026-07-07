@@ -8,7 +8,13 @@ import base64
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
 
 class RailwayAdapter:
-    BACKEND_URL = "https://web-production-7d98d.up.railway.app"
+    # 优先从 Streamlit Secrets 读取（Railway 服务重建后域名会变，
+    # 改这里的 secrets 配置即可，不需要再改代码、不需要再等部署）。
+    # 找不到 secrets 配置时，回退到目前已知的最新域名。
+    try:
+        BACKEND_URL = st.secrets["RAILWAY_BACKEND_URL"]
+    except (KeyError, FileNotFoundError):
+        BACKEND_URL = "https://web-production-b9d95.up.railway.app"
     def __init__(self):
         pass
     def chat(self, system, messages, max_tokens=500):
