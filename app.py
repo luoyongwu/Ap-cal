@@ -18,20 +18,39 @@ class RailwayAdapter:
     def __init__(self):
         pass
     def chat(self, system, messages, max_tokens=500):
-        import urllib.request, json
+        import urllib.request, json, urllib.error
         last_user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
         concept_id = st.session_state.get("concept_id", "unknown")
-        student_id = st.session_state.get("student_id", "streamlit_user")
         lang = "en" if st.session_state.get("lang", "zh") == "en" else "zh"
-        payload = {"student_id": student_id, "concept_id": concept_id,
+
+        # ===== 身份系统 v0.2 改造 =====
+        # 不再由前端自己声明 student_id，改为在请求头携带 session_token，
+        # 由后端从 token 解析出真正的 student_uuid（见 ADR-010 安全底线原则）。
+        token = st.session_state.get("session_token")
+        if not token:
+            raise RuntimeError("尚未登录，无法调用 Railway Backend，请先在侧边栏登录。")
+
+        payload = {"concept_id": concept_id,
                    "user_input": last_user, "session_id": "streamlit",
                    "language": lang}
         req = urllib.request.Request(
             f"{self.BACKEND_URL}/api/v1/chat",
             data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req) as r:
-            result = json.loads(r.read())
+            headers={"Content-Type": "application/json",
+                     "Authorization": f"Bearer {token}"},
+            method="POST")
+        try:
+            with urllib.request.urlopen(req) as r:
+                result = json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            if e.code == 401:
+                # session 失效：可能是过期，也可能是账号在其他设备重新登录，
+                # 把本地 session_token 清空，逼用户重新走登录流程。
+                st.session_state.session_token = None
+                st.session_state.student_display_name = None
+                raise RuntimeError("会话已失效（可能您的账号已在其他设备登录），请重新登录。") from e
+            raise
+        # ===== 身份系统改造结束 =====
         return result.get("response", "")
 
 class AnthropicAdapter:
@@ -77,6 +96,43 @@ def get_adapter():
     elif b == "deepseek": return DeepSeekAdapter(k)
     elif b == "railway": return RailwayAdapter()
     else: return OllamaAdapter()
+
+
+# ================================================================
+# 身份系统 v0.2 — 登录函数
+# ================================================================
+def railway_login(login_code: str) -> bool:
+    """调用后端 /auth/login。成功则把 session_token 写入 st.session_state 并返回 True；
+    失败则把错误信息写入 st.session_state["_login_error"] 并返回 False。"""
+    import urllib.request, json, urllib.error
+
+    payload = {"login_code": login_code.strip()}
+    req = urllib.request.Request(
+        f"{RailwayAdapter.BACKEND_URL}/auth/login",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST")
+    try:
+        with urllib.request.urlopen(req) as r:
+            result = json.loads(r.read())
+        st.session_state.session_token = result["session_token"]
+        st.session_state.student_display_name = result.get("display_name")
+        st.session_state["_login_error"] = None
+        return True
+    except urllib.error.HTTPError as e:
+        try:
+            err_body = json.loads(e.read())
+            st.session_state["_login_error"] = err_body.get("detail", "登录失败，请检查授权码。")
+        except Exception:
+            st.session_state["_login_error"] = "登录失败，请检查授权码。"
+        return False
+    except Exception as e:
+        st.session_state["_login_error"] = f"网络错误，请稍后重试：{e}"
+        return False
+# ================================================================
+# 身份系统登录函数结束
+# ================================================================
+
 
 if "student_track" not in st.session_state:
     st.session_state.student_track = "AB"
@@ -320,6 +376,10 @@ for k, v in {
     "curr_unit": "Unit 1: 极限与连续", "curr_concept": "1.1 极限简介",
     "mastery_scores": {}, "mastery_ready": False, "last_summary": "",
     "lang": "Chinese",
+    # ---- 身份系统 v0.2 新增状态 ----
+    "session_token": None,
+    "student_display_name": None,
+    "_login_error": None,
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -396,6 +456,35 @@ with st.sidebar:
                 st.error(L["key_err"])
     st.divider()
 
+    # ================================================================
+    # 身份系统 v0.2 — 登录区域（仅 Railway Backend 需要）
+    # ================================================================
+    if st.session_state.backend == "railway":
+        if st.session_state.session_token:
+            name = st.session_state.student_display_name or "已登录学生"
+            st.success(f"👤 {name}")
+            if st.button("🚪 退出登录", use_container_width=True):
+                st.session_state.session_token = None
+                st.session_state.student_display_name = None
+                st.session_state.messages = []
+                st.rerun()
+        else:
+            st.subheader("🔐 学生登录")
+            login_code_input = st.text_input("请输入授权码", placeholder="LUO-XXXXXXXX")
+            if st.button("登录", use_container_width=True):
+                if login_code_input.strip():
+                    if railway_login(login_code_input):
+                        st.session_state.messages = []
+                        st.rerun()
+                    else:
+                        st.error(st.session_state.get("_login_error", "登录失败"))
+                else:
+                    st.warning("请输入授权码。")
+        st.divider()
+    # ================================================================
+    # 身份系统登录区域结束
+    # ================================================================
+
 with st.sidebar:
     selected_unit = st.selectbox(L["select_unit"], list(_filtered_UNITS().keys()),
         index=list(_filtered_UNITS().keys()).index(st.session_state.curr_unit)
@@ -468,7 +557,12 @@ def get_ai_response(extra_content=None):
             if isinstance(m.get("content"), (str, list))]
     if extra_content: msgs.append({"role": "user", "content": extra_content})
     with st.spinner(L_local["spinner"]):
-        reply = adapter.chat(system_msg, msgs)
+        try:
+            reply = adapter.chat(system_msg, msgs)
+        except RuntimeError as e:
+            # 身份系统改造：捕获"未登录"或"会话失效"错误，友好提示而不是让整个页面崩溃
+            st.error(str(e))
+            st.stop()
         update_mastery(concept_id, reply)
         leakage = extract_leakage(reply)
         if leakage is not None:
@@ -487,6 +581,14 @@ st.title(f"{L['title_prefix']}: {st.session_state.curr_concept}")
 if not st.session_state.key_confirmed:
     st.info(f"👈 {L['wait']}")
     st.stop()
+
+# ================================================================
+# 身份系统 v0.2 — Railway Backend 必须先登录才能使用
+# ================================================================
+if st.session_state.backend == "railway" and not st.session_state.session_token:
+    st.info("👈 请先在侧边栏输入授权码登录，再开始学习。")
+    st.stop()
+# ================================================================
 
 if show_test:
     st.subheader(L["test_panel"])
