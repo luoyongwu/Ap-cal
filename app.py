@@ -539,6 +539,13 @@ def generate_summary(concept_id):
 def get_ai_response(extra_content=None):
     adapter = get_adapter()
     concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
+    # ===== Bug 修复（2026-07-11 人工测试003号学生时发现）=====
+    # RailwayAdapter.chat() 读取的是 st.session_state["concept_id"]，
+    # 但此前整个文件里从未有任何地方往这个 key 写入过值——concept_id
+    # 一直只是本函数内部的局部变量，导致后端 cognitive_signals 表的
+    # concept 列永远写入默认兜底值 "unknown"。这里补上同步写入。
+    st.session_state["concept_id"] = concept_id
+    # ===== Bug 修复结束 =====
     L_local = LANG_LABELS[st.session_state.lang]
     system_msg = (
         f"You are a strict AP Calculus Socratic tutor. {L_local['lang_instr']} "
