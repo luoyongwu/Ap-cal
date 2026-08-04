@@ -332,6 +332,18 @@ for k, v in {
     "session_token": None,
     "student_display_name": None,
     "_login_error": None,
+    # ---- 2026-08 修复：leakage_log 补入初始化字典 ----
+    # 此前 leakage_log 从未出现在这份默认状态字典里，也从未在任何一处
+    # state 重置逻辑（切换 backend/切换概念/刷新按钮/登录登出）里被
+    # 清空过。真实生产链路（Railway Backend）的 SCL_SYSTEM_PROMPT 里
+    # 根本不含 [LEAKAGE:N] 指令（只有走 Anthropic/DeepSeek/Ollama 这几个
+    # 非 Railway 测试后端时，本文件里 get_ai_response() 构造的 system_msg
+    # 才会要求模型输出这个标签）——但由于 leakage_log 从不清空，一旦
+    # 会话中任意时刻用非 Railway 后端测试过一次、写入过一条记录，之后
+    # 无论切换到哪个 backend/概念，前端"Leakage Score: N/3"这行会一直
+    # 显示那条陈旧记录，看起来像是"当前这一轮的实时评分"，实际上和
+    # 当前对话完全无关。这里补上默认值，下面三处重置逻辑里补上清空。
+    "leakage_log": [],
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -371,6 +383,7 @@ with st.sidebar:
         st.session_state.key_confirmed = False
         st.session_state.api_key = ""
         st.session_state.messages = []
+        st.session_state.leakage_log = []  # 2026-08 修复：切换backend时一并清空
         if new_backend == "anthropic":
             try:
                 _k = st.secrets["ANTHROPIC_API_KEY"]
@@ -419,6 +432,7 @@ with st.sidebar:
                 st.session_state.session_token = None
                 st.session_state.student_display_name = None
                 st.session_state.messages = []
+                st.session_state.leakage_log = []  # 2026-08 修复：登出时一并清空
                 st.rerun()
         else:
             st.subheader("🔐 学生登录")
@@ -427,6 +441,7 @@ with st.sidebar:
                 if login_code_input.strip():
                     if railway_login(login_code_input):
                         st.session_state.messages = []
+                        st.session_state.leakage_log = []  # 2026-08 修复：登录成功时一并清空
                         st.rerun()
                     else:
                         st.error(st.session_state.get("_login_error", "登录失败"))
@@ -451,6 +466,7 @@ with st.sidebar:
         st.session_state.last_summary = ""
         st.session_state.mastery_ready = False
         st.session_state.mastery_scores = {}
+        st.session_state.leakage_log = []  # 2026-08 修复：切换概念时一并清空
         st.rerun()
     st.divider()
     status_color = L["connected_color"] if st.session_state.key_confirmed else L["disconnected_color"]
@@ -507,6 +523,19 @@ def get_ai_response(extra_content=None):
     # 走 Railway Backend 时，RailwayAdapter.chat() 本来就不发送 system
     # 参数（见该类定义），这里的 system_msg 对 Railway 路径无实际影响，
     # 后端会用自己拼好的 SCL_SYSTEM_PROMPT + concept_constraint。
+    #
+    # 2026-08 修复重要说明：下面这段 system_msg（含 [LEAKAGE:N] 指令）
+    # 只在 backend 为 anthropic/deepseek/ollama 时真正生效。走 Railway
+    # Backend（真实学生所用的链路）时，后端自己的 SCL_SYSTEM_PROMPT 里
+    # 完全没有 LEAKAGE 相关指令，Claude 不会输出 [LEAKAGE:N]，
+    # extract_leakage() 应该匹配不到、leakage_log 不应该新增记录。
+    # 之前观测到 Railway 链路上仍然显示"Leakage Score: N/3"，根因是
+    # leakage_log 从未在切换 backend/概念时清空，显示的是本会话更早
+    # 用非 Railway 后端测试时留下的陈旧值，不是当前对话的实时评分——
+    # 已在上面的 state 重置处修复。如果未来需要 Railway 路径也具备
+    # 泄漏自评能力，需要在后端 SCL_SYSTEM_PROMPT 里新增对应指令，并让
+    # socratic_chat() 的返回值里包含 leakage 字段，而不是依赖这里的
+    # system_msg（这里的 system_msg 对 Railway 路径不生效）。
     system_msg = (
         f"You are a strict AP Calculus Socratic tutor. {L_local['lang_instr']} "
         f"NEVER give the answer directly. Always guide with questions. "
@@ -589,6 +618,7 @@ if st.button(L["refresh"]):
     st.session_state.last_summary = ""
     st.session_state.mastery_ready = False
     st.session_state.mastery_scores = {}
+    st.session_state.leakage_log = []  # 2026-08 修复：点"刷新当前概念"时一并清空
     st.rerun()
 
 for i, m in enumerate(st.session_state.messages):
