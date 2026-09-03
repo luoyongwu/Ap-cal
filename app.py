@@ -6,6 +6,15 @@ from anthropic import Anthropic
 import base64
 import uuid
 
+# 2026-09-03 item3 修复新增依赖（见 requirements.txt 同批次更新）。
+# 用 try/except 兜底：万一某次部署 requirements.txt 还没生效，
+# 保活功能静默跳过而不是让整个 app 崩溃。
+try:
+    from streamlit_autorefresh import st_autorefresh
+    _AUTOREFRESH_AVAILABLE = True
+except ImportError:
+    _AUTOREFRESH_AVAILABLE = False
+
 # ================================================================
 # 2026-09-03 Fix#2/#4 补丁说明（请勿删除本注释块）
 # ----------------------------------------------------------------
@@ -33,9 +42,34 @@ import uuid
 #   注：这是低风险的缓解性修复，不是 100% 确认的根因定位——如果
 #   问题依然复现，需要进一步排查。
 #
-# 本轮范围内明确不包含：3分钟无操作断线复原到初始状态的完整修复
-# （streamlit-autorefresh 保活 + URL 持久化 + 后端 rehydrate），
-# 已按用户 2026-09-03 决定单独放到下一轮补丁。
+# 2026-09-03（当天第二轮）新增 — item 3 完整修复：
+# 3分钟无操作后复原到初始状态
+# ----------------------------------------------------------------
+# 病灶（已确认）：st.session_state 只存在于 Streamlit 服务端内存，
+# 和浏览器 WebSocket 连接绑定。移动端亮屏静默一段时间后代理层
+# （如 Streamlit Cloud/Railway Ingress）可能判定连接空闲而回收；
+# 熄屏/切后台/弱网切换则会直接断开 WebSocket。无论哪种情况，
+# 重连后 Streamlit 都会分配一个全新的空 session_state，登录状态、
+# 对话历史全部消失，表现为"回到初始状态"。
+#
+# 采纳方案（Gemini 建议，两步协同）：
+#   (a) 前端保活：st_autorefresh(interval=25000) 每 25 秒产生一次
+#       服务器级别的 rerun 流量，防止亮屏静默期间被代理层的
+#       idle timer 判定为空闲断连。
+#   (b) 断线复原：登录成功时把 session_token 和 session_id 写入
+#       URL query params（?auth=...&sid=...）。WebSocket 断线重连、
+#       st.session_state 被清空后，脚本顶部会检测到"session_token
+#       为空但 URL 里带着 auth/sid"这种情况，调用后端新增的
+#       /api/v1/session/restore 端点（用 token 换回身份校验 +
+#       该 session_id 下的历史消息），把登录状态和对话历史重新
+#       灌回 st.session_state，实现无感恢复，不需要用户重新登录。
+#       此端点依赖后端 luo-cal-backend 仓库 main.py 的配套改动
+#       （同批次一起推送）。
+#
+# 已知安全权衡：session_token 出现在 URL 里意味着会被浏览器历史、
+# 服务器访问日志等记录到——这是"断线可恢复"与"token 完全不落地"
+# 之间的权衡，当前内部测试阶段接受这个权衡，真正对外之前需要
+# 重新评估（比如改用更短时效的一次性 restore token）。
 # ================================================================
 
 st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide",
@@ -165,6 +199,12 @@ def railway_login(login_code: str) -> bool:
         # 对话历史彻底隔开，解决跨登录串戏问题。
         st.session_state.session_id = str(uuid.uuid4())
         st.session_state["_login_error"] = None
+        # ===== 2026-09-03 item3 修复：把登录凭证写入 URL query params =====
+        # 断线重连后 st.session_state 会被清空，但浏览器地址栏里的
+        # query params 不受影响——靠这两个参数让 attempt_session_restore()
+        # 之后能找回身份，见文件顶部的说明。
+        st.query_params["auth"] = result["session_token"]
+        st.query_params["sid"] = st.session_state.session_id
         return True
     except urllib.error.HTTPError as e:
         try:
@@ -178,6 +218,52 @@ def railway_login(login_code: str) -> bool:
         return False
 # ================================================================
 # 身份系统登录函数结束
+# ================================================================
+
+
+# ================================================================
+# 2026-09-03 item3 修复 — 断线复原函数
+# ================================================================
+def attempt_session_restore():
+    """WebSocket 断线重连后 st.session_state 被清空时调用。如果 URL
+    query params 里带着上次登录写入的 auth/sid，尝试用它们向后端换回
+    身份校验结果 + 该 session_id 下的历史消息，重新灌入
+    st.session_state，实现无感恢复。token 失效/过期时会清掉 URL 参数，
+    静默回退到正常登录流程，不会报错崩溃。"""
+    if st.session_state.get("session_token"):
+        return  # 已经有有效登录状态，不需要复原
+    auth_param = st.query_params.get("auth")
+    sid_param = st.query_params.get("sid")
+    if not auth_param or not sid_param:
+        return
+
+    import urllib.request, json, urllib.error
+    req = urllib.request.Request(
+        f"{RailwayAdapter.BACKEND_URL}/api/v1/session/restore?session_id={sid_param}",
+        headers={"Authorization": f"Bearer {auth_param}"},
+        method="GET")
+    try:
+        with urllib.request.urlopen(req) as r:
+            result = json.loads(r.read())
+        st.session_state.session_token = auth_param
+        st.session_state.session_id = sid_param
+        st.session_state.student_display_name = result.get("display_name")
+        st.session_state.messages = [
+            {"role": m["role"], "content": m["content"]}
+            for m in result.get("messages", [])
+        ]
+        st.session_state.backend = "railway"
+        st.session_state.key_confirmed = True
+    except Exception:
+        # token 失效、过期，或后端暂时不可用：清掉 URL 里的陈旧参数，
+        # 让脚本继续往下走正常的登录流程，不抛异常打断整个页面。
+        for _p in ("auth", "sid"):
+            try:
+                del st.query_params[_p]
+            except KeyError:
+                pass
+# ================================================================
+# 断线复原函数结束
 # ================================================================
 
 
@@ -401,6 +487,11 @@ for k, v in {
     if k not in st.session_state:
         st.session_state[k] = v
 
+# 2026-09-03 item3 修复：在其它逻辑读取 session_token 之前，先尝试
+# 断线复原——如果这是一次 WebSocket 重连后的全新 session_state，
+# 且 URL 里带着有效的 auth/sid，这里会把登录状态和历史消息补回来。
+attempt_session_restore()
+
 if not st.session_state.key_confirmed:
     _b = st.session_state.backend
     if _b == "anthropic":
@@ -487,6 +578,13 @@ with st.sidebar:
                 st.session_state.session_id = None  # 2026-09-03 Fix#2：登出时一并清空
                 st.session_state.messages = []
                 st.session_state.leakage_log = []  # 2026-08 修复：登出时一并清空
+                # 2026-09-03 item3 修复：登出时把 URL 里的 auth/sid 也清掉，
+                # 避免残留的旧 token 被断线复原逻辑误用。
+                for _p in ("auth", "sid"):
+                    try:
+                        del st.query_params[_p]
+                    except KeyError:
+                        pass
                 st.rerun()
         else:
             st.subheader("🔐 学生登录")
@@ -641,6 +739,17 @@ if st.session_state.backend == "railway" and not st.session_state.session_token:
     st.info("👈 请先在侧边栏输入授权码登录，再开始学习。")
     st.stop()
 # ================================================================
+
+# ================================================================
+# 2026-09-03 item3 修复：保活自动刷新
+# ----------------------------------------------------------------
+# 只在"已登录 Railway 会话"这个场景下开启，避免在配置页/其它后端
+# 测试场景里平白多刷新。interval 单位是毫秒，25秒一次，用来防止
+# 亮屏静默期间代理层的 idle timer 把 WebSocket 连接判定为空闲断开。
+# ================================================================
+if (_AUTOREFRESH_AVAILABLE and st.session_state.backend == "railway"
+        and st.session_state.session_token):
+    st_autorefresh(interval=25000, key="keepalive_autorefresh")
 
 if show_test:
     st.subheader(L["test_panel"])
