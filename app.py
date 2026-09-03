@@ -4,8 +4,42 @@ DISABLE_SCL = os.environ.get("DISABLE_SCL", "0") == "1"
 import streamlit as st
 from anthropic import Anthropic
 import base64
+import uuid
 
-st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide")
+# ================================================================
+# 2026-09-03 Fix#2/#4 补丁说明（请勿删除本注释块）
+# ----------------------------------------------------------------
+# Fix#2（稳定性 - session_id 硬编码）：
+#   根因：RailwayAdapter.chat() 此前把 session_id 写死为字面量
+#   "streamlit"，导致同一 student_uuid 的后端对话历史
+#   （chat_messages 表，经 fetch_chat_history() 喂给 Claude）永远不会
+#   随"重新登录"而重置，不同登录之间的上下文互相串戏。
+#   修复：railway_login() 登录成功时生成一个真实的 uuid4，存入
+#   st.session_state.session_id；RailwayAdapter.chat() 改为读取这个
+#   值，不再使用硬编码字面量。
+#   范围决策（方案B，2026-09-03 已确认）：session_id 只在"登录时"
+#   生成一次，不随"切换概念"重新生成——概念级别的彻底隔离（Gemini
+#   建议的方案A）留待后续、真正需要多学生连续使用时再单独处理，
+#   不在本次补丁范围内。
+#
+# Fix（item 4 - 初始"<<"侧边栏按钮不显示）：
+#   假设：首次进入时"messages 为空 -> 自动调 get_ai_response() ->
+#   st.rerun()"这个自动重跑，在移动端可能抢在侧边栏折叠按钮完成
+#   渲染之前就把整页刷新掉。
+#   修复：(a) st.set_page_config 显式声明 initial_sidebar_state=
+#   "expanded"；(b) 引入 is_initializing 标志位，让第一次进入某个
+#   概念时先完整渲染一次页面（不发起 AI 调用），下一次 rerun 才真正
+#   触发 get_ai_response()，给移动端浏览器一次完整的先行渲染机会。
+#   注：这是低风险的缓解性修复，不是 100% 确认的根因定位——如果
+#   问题依然复现，需要进一步排查。
+#
+# 本轮范围内明确不包含：3分钟无操作断线复原到初始状态的完整修复
+# （streamlit-autorefresh 保活 + URL 持久化 + 后端 rehydrate），
+# 已按用户 2026-09-03 决定单独放到下一轮补丁。
+# ================================================================
+
+st.set_page_config(page_title="Luo-cal AP微积分导师", layout="wide",
+                    initial_sidebar_state="expanded")
 
 class RailwayAdapter:
     # 优先从 Streamlit Secrets 读取（Railway 服务重建后域名会变，
@@ -30,8 +64,15 @@ class RailwayAdapter:
         if not token:
             raise RuntimeError("尚未登录，无法调用 Railway Backend，请先在侧边栏登录。")
 
+        # ===== 2026-09-03 Fix#2：session_id 不再硬编码 =====
+        # 登录成功时（railway_login()）已经生成了一个真实 uuid4 存入
+        # st.session_state.session_id；这里改为读取该值。理论上登录
+        # 后这个 key 一定存在，但仍保留 "streamlit" 作为兜底，避免
+        # 极端情况下（例如手动清过部分 session_state）直接崩溃。
+        session_id = st.session_state.get("session_id") or "streamlit"
+
         payload = {"concept_id": concept_id,
-                   "user_input": last_user, "session_id": "streamlit",
+                   "user_input": last_user, "session_id": session_id,
                    "language": lang}
         req = urllib.request.Request(
             f"{self.BACKEND_URL}/api/v1/chat",
@@ -117,6 +158,12 @@ def railway_login(login_code: str) -> bool:
             result = json.loads(r.read())
         st.session_state.session_token = result["session_token"]
         st.session_state.student_display_name = result.get("display_name")
+        # ===== 2026-09-03 Fix#2：登录成功时生成真实 session_id =====
+        # 方案B（2026-09-03 已确认）：只在登录这一刻生成一次，不随
+        # "切换概念"重新生成。每次成功登录都会拿到一个全新 uuid4，
+        # 从而和之前任何登录（无论是否同一个 student_uuid）的后端
+        # 对话历史彻底隔开，解决跨登录串戏问题。
+        st.session_state.session_id = str(uuid.uuid4())
         st.session_state["_login_error"] = None
         return True
     except urllib.error.HTTPError as e:
@@ -332,6 +379,12 @@ for k, v in {
     "session_token": None,
     "student_display_name": None,
     "_login_error": None,
+    # ---- 2026-09-03 Fix#2 新增：真实 session_id ----
+    # 登录前为 None；railway_login() 登录成功时会赋一个真实 uuid4。
+    "session_id": None,
+    # ---- 2026-09-03 item4 修复新增：首次进入某概念时的初始化标志位 ----
+    # 见下方"if not st.session_state.messages"那段的说明。
+    "is_initializing": False,
     # ---- 2026-08 修复：leakage_log 补入初始化字典 ----
     # 此前 leakage_log 从未出现在这份默认状态字典里，也从未在任何一处
     # state 重置逻辑（切换 backend/切换概念/刷新按钮/登录登出）里被
@@ -431,6 +484,7 @@ with st.sidebar:
             if st.button("🚪 退出登录", use_container_width=True):
                 st.session_state.session_token = None
                 st.session_state.student_display_name = None
+                st.session_state.session_id = None  # 2026-09-03 Fix#2：登出时一并清空
                 st.session_state.messages = []
                 st.session_state.leakage_log = []  # 2026-08 修复：登出时一并清空
                 st.rerun()
@@ -467,6 +521,9 @@ with st.sidebar:
         st.session_state.mastery_ready = False
         st.session_state.mastery_scores = {}
         st.session_state.leakage_log = []  # 2026-08 修复：切换概念时一并清空
+        # 注：按方案B（2026-09-03 已确认），session_id 不在这里重新
+        # 生成——只在登录时生成一次。切概念时后端历史依然共享同一个
+        # session_id（用于出题查重），只是前端本地展示清空。
         st.rerun()
     st.divider()
     status_color = L["connected_color"] if st.session_state.key_confirmed else L["disconnected_color"]
@@ -603,15 +660,32 @@ if show_test:
     st.divider()
 
 if not st.session_state.messages:
-    concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
-    key_en = concept_id + "_en"
-    if st.session_state.lang == "Chinese":
-        opening = OPENING_PROMPTS.get(concept_id, L["opening_default"].format(concept=st.session_state.curr_concept))
+    # ================================================================
+    # 2026-09-03 item4 修复：is_initializing 标志位
+    # ----------------------------------------------------------------
+    # 此前这里进入某个概念时会立即同步调用 get_ai_response()（等待
+    # Claude API 返回）再 st.rerun()，移动端可能在侧边栏折叠按钮
+    # ("<<") 完成渲染前就被这次强制重跑打断。现在分两步：第一次进入
+    # （is_initializing 还是 False）只翻转标志位、立刻 rerun，不发起
+    # AI 调用，让这一轮先把页面完整渲染出来；下一轮（is_initializing
+    # 已经是 True）才真正调用 get_ai_response()。
+    # 这是缓解性修复，不是 100% 确认的根因——如果问题依然复现，
+    # 需要进一步排查（比如浏览器本身的渲染时机问题）。
+    # ================================================================
+    if not st.session_state.is_initializing:
+        st.session_state.is_initializing = True
+        st.rerun()
     else:
-        opening = OPENING_PROMPTS.get(key_en, L["opening_default"].format(concept=st.session_state.curr_concept))
-    first = get_ai_response(opening)
-    st.session_state.messages.append({"role": "assistant", "content": first})
-    st.rerun()
+        concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
+        key_en = concept_id + "_en"
+        if st.session_state.lang == "Chinese":
+            opening = OPENING_PROMPTS.get(concept_id, L["opening_default"].format(concept=st.session_state.curr_concept))
+        else:
+            opening = OPENING_PROMPTS.get(key_en, L["opening_default"].format(concept=st.session_state.curr_concept))
+        first = get_ai_response(opening)
+        st.session_state.messages.append({"role": "assistant", "content": first})
+        st.session_state.is_initializing = False
+        st.rerun()
 
 if st.button(L["refresh"]):
     st.session_state.messages = []
