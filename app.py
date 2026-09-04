@@ -205,6 +205,12 @@ def railway_login(login_code: str) -> bool:
         # 之后能找回身份，见文件顶部的说明。
         st.query_params["auth"] = result["session_token"]
         st.query_params["sid"] = st.session_state.session_id
+        # ===== 2026-09-04 记录统一性修复：登录时把当前概念也写入 URL =====
+        # 见 attempt_session_restore() 处的说明。此处用的是登录这一刻
+        # st.session_state.curr_unit/curr_concept 的当前值（初始化默认值，
+        # 或上一位学生在同一浏览器会话里最后停留的概念——这是已有行为，
+        # 不属于本次修复范围）。
+        _sync_concept_to_url()
         return True
     except urllib.error.HTTPError as e:
         try:
@@ -222,6 +228,38 @@ def railway_login(login_code: str) -> bool:
 
 
 # ================================================================
+# 2026-09-04 记录统一性修复 — concept_id URL 同步辅助函数
+# ----------------------------------------------------------------
+# 背景（详见 memory /areas/luo-cal-ole.md "Root cause REFINED"节）：
+# item3 的 attempt_session_restore() 只恢复了 session_token 和聊天
+# 记录，从未涉及 st.session_state.curr_unit/curr_concept。断线重连后，
+# st.session_state 被整体清空重建，curr_unit/curr_concept 会被下面
+# state 初始化字典的默认值（"1.1"）覆盖，而 session_token/messages
+# 却被 attempt_session_restore() 正确恢复——两者不同步，导致重连后
+# concept_id 悄悄回落到 "1.1"，此后无论侧边栏还是对话内切换都不会
+# 纠正，直到用户手动重新点一次侧边栏。
+#
+# 修复思路：和 auth/sid 一样，把 curr_unit/curr_concept 对应的
+# concept_id（如 "3.2"）也写进 URL query params（?concept=3.2），
+# 在 attempt_session_restore() 里一并读回并 rehydrate。
+#
+# CONCEPT_ID_TO_LOCATION 在 UNITS 字典定义之后构建（见下方），
+# 本函数在模块加载完成、UNITS 已存在后才会被实际调用，因此这里
+# 直接引用 UNITS/CONCEPT_ID_TO_LOCATION 是安全的（Python 按调用时
+# 绑定全局名字，不是按定义时）。
+# ================================================================
+def _sync_concept_to_url():
+    """把当前 st.session_state.curr_unit/curr_concept 对应的 concept_id
+    写入 URL query params，供 attempt_session_restore() 断线重连后取回。
+    找不到对应 concept_id（理论上不应发生）时静默跳过，不影响主流程。"""
+    try:
+        concept_id = UNITS[st.session_state.curr_unit][st.session_state.curr_concept]
+        st.query_params["concept"] = concept_id
+    except KeyError:
+        pass
+
+
+# ================================================================
 # 2026-09-03 item3 修复 — 断线复原函数
 # ================================================================
 def attempt_session_restore():
@@ -229,7 +267,10 @@ def attempt_session_restore():
     query params 里带着上次登录写入的 auth/sid，尝试用它们向后端换回
     身份校验结果 + 该 session_id 下的历史消息，重新灌入
     st.session_state，实现无感恢复。token 失效/过期时会清掉 URL 参数，
-    静默回退到正常登录流程，不会报错崩溃。"""
+    静默回退到正常登录流程，不会报错崩溃。
+    2026-09-04 记录统一性修复：同时读回 URL 里的 concept 参数（若存在），
+    一并 rehydrate curr_unit/curr_concept，避免断线重连后 concept_id
+    静默回落到侧边栏默认值 "1.1"。"""
     if st.session_state.get("session_token"):
         return  # 已经有有效登录状态，不需要复原
     auth_param = st.query_params.get("auth")
@@ -254,6 +295,18 @@ def attempt_session_restore():
         ]
         st.session_state.backend = "railway"
         st.session_state.key_confirmed = True
+        # ===== 2026-09-04 记录统一性修复：一并复原 curr_unit/curr_concept =====
+        # 根因：此前这里完全没有涉及概念状态，导致重连后概念状态被下面
+        # state 初始化字典的默认值 "1.1" 覆盖，而其它状态却被正确恢复。
+        # 用 URL 里的 concept 参数（登录时/每次手动切换概念时写入，见
+        # _sync_concept_to_url()）反查回 (unit名, concept名) 二元组。
+        # 找不到该参数，或参数值不在当前 UNITS 表里（例如题库改版后旧
+        # 链接失效）时，静默保留默认值，不报错、不中断复原流程。
+        concept_param = st.query_params.get("concept")
+        if concept_param and concept_param in CONCEPT_ID_TO_LOCATION:
+            _restored_unit, _restored_concept = CONCEPT_ID_TO_LOCATION[concept_param]
+            st.session_state.curr_unit = _restored_unit
+            st.session_state.curr_concept = _restored_concept
     except Exception:
         # token 失效、过期，或后端暂时不可用：清掉 URL 里的陈旧参数，
         # 让脚本继续往下走正常的登录流程，不抛异常打断整个页面。
@@ -315,6 +368,20 @@ UNITS = {
         "Bridge-R1 表示转换": "Bridge-R1", "8.X 综合练习": "8.X"
     },
     "BC Toolkit": {"B1 分部积分法": "B1"},
+}
+
+# ================================================================
+# 2026-09-04 记录统一性修复：concept_id -> (unit名, concept名) 反查表
+# ----------------------------------------------------------------
+# attempt_session_restore() 和后续任何需要"从 URL 里的 concept_id
+# 反查回侧边栏下拉框用的 (unit名, concept名)"的地方都用这张表。
+# 在 UNITS 定义之后、模块加载时构建一次即可，UNITS 本身在运行时
+# 不会变化。
+# ================================================================
+CONCEPT_ID_TO_LOCATION = {
+    _cid: (_uname, _cname)
+    for _uname, _concepts in UNITS.items()
+    for _cname, _cid in _concepts.items()
 }
 
 def _filtered_UNITS():
@@ -490,6 +557,8 @@ for k, v in {
 # 2026-09-03 item3 修复：在其它逻辑读取 session_token 之前，先尝试
 # 断线复原——如果这是一次 WebSocket 重连后的全新 session_state，
 # 且 URL 里带着有效的 auth/sid，这里会把登录状态和历史消息补回来。
+# 2026-09-04 记录统一性修复：同批复原逻辑现在也会一并 rehydrate
+# curr_unit/curr_concept（见 attempt_session_restore() 内部注释）。
 attempt_session_restore()
 
 if not st.session_state.key_confirmed:
@@ -580,7 +649,11 @@ with st.sidebar:
                 st.session_state.leakage_log = []  # 2026-08 修复：登出时一并清空
                 # 2026-09-03 item3 修复：登出时把 URL 里的 auth/sid 也清掉，
                 # 避免残留的旧 token 被断线复原逻辑误用。
-                for _p in ("auth", "sid"):
+                # 2026-09-04 记录统一性修复：一并清掉 concept 参数，避免
+                # 下一位在同一浏览器登录的学生短暂"继承"上一位的概念 URL
+                # 参数（railway_login() 成功后会立即用新学生自己当前的
+                # curr_unit/curr_concept 覆盖它，但登出后先清空更干净）。
+                for _p in ("auth", "sid", "concept"):
                     try:
                         del st.query_params[_p]
                     except KeyError:
@@ -622,6 +695,10 @@ with st.sidebar:
         # 注：按方案B（2026-09-03 已确认），session_id 不在这里重新
         # 生成——只在登录时生成一次。切概念时后端历史依然共享同一个
         # session_id（用于出题查重），只是前端本地展示清空。
+        # 2026-09-04 记录统一性修复：每次通过侧边栏切换概念时，同步
+        # 把新概念写入 URL query params，供未来任何一次断线重连时
+        # attempt_session_restore() 取回，避免 concept_id 悄悄回落。
+        _sync_concept_to_url()
         st.rerun()
     st.divider()
     status_color = L["connected_color"] if st.session_state.key_confirmed else L["disconnected_color"]
