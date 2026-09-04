@@ -105,9 +105,13 @@ class RailwayAdapter:
         # 极端情况下（例如手动清过部分 session_state）直接崩溃。
         session_id = st.session_state.get("session_id") or "streamlit"
 
+        # ===== 2026-09-04 记录统一性修复（对话内概念漂移）新增 =====
+        # 把当前学生轨道一并传给后端，后端用它过滤 actual_concept_id
+        # 分类调用的合法闭集（AB 轨道看不到 BC-only 概念）。
         payload = {"concept_id": concept_id,
                    "user_input": last_user, "session_id": session_id,
-                   "language": lang}
+                   "language": lang,
+                   "student_track": st.session_state.get("student_track", "AB")}
         req = urllib.request.Request(
             f"{self.BACKEND_URL}/api/v1/chat",
             data=json.dumps(payload).encode(),
@@ -125,6 +129,24 @@ class RailwayAdapter:
                 st.session_state.student_display_name = None
                 raise RuntimeError("会话已失效（可能您的账号已在其他设备登录），请重新登录。") from e
             raise
+
+        # ===== 2026-09-04 记录统一性修复（对话内概念漂移）新增 =====
+        # 后端在 grade_student_answer() 里额外判断了"本轮实际讨论的是
+        # 哪个 concept_id"（见 main.py 同批修复），通过 resolved_
+        # concept_id 字段回传。如果和前端当前侧边栏状态不一致（典型
+        # 场景：学生纯对话内要求换概念，从未碰过侧边栏下拉框），这里
+        # 主动把 st.session_state.curr_unit/curr_concept 更新过来并
+        # 同步进 URL，让侧边栏、大标题、以及下次断线重连都能反映真实
+        # 概念，而不是停留在上一次手动选择的值上。找不到对应
+        # (unit名, concept名)（防御性兜底，理论上不该发生，因为后端
+        # 已经用闭集校验过）时静默跳过，不影响正常返回。
+        resolved_concept_id = result.get("resolved_concept_id")
+        if resolved_concept_id and resolved_concept_id in CONCEPT_ID_TO_LOCATION:
+            _resolved_unit, _resolved_concept = CONCEPT_ID_TO_LOCATION[resolved_concept_id]
+            if (_resolved_unit, _resolved_concept) != (st.session_state.curr_unit, st.session_state.curr_concept):
+                st.session_state.curr_unit = _resolved_unit
+                st.session_state.curr_concept = _resolved_concept
+                _sync_concept_to_url()
         # ===== 身份系统改造结束 =====
         return result.get("response", "")
 
