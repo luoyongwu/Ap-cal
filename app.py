@@ -703,8 +703,33 @@ with st.sidebar:
     selected_unit = st.selectbox(L["select_unit"], list(_filtered_UNITS().keys()),
         index=list(_filtered_UNITS().keys()).index(st.session_state.curr_unit)
         if st.session_state.curr_unit in _filtered_UNITS() else 0)
-    selected_concept = st.selectbox(L["select_concept"],
-        list(_filtered_UNITS().get(selected_unit, UNITS.get(selected_unit, {})).keys()))
+    # ================================================================
+    # 2026-09-05 记录统一性修复(六)：Concept 下拉框缺失 index= 参数
+    # ----------------------------------------------------------------
+    # 根因（2026-09-05 完整复现 + Supabase/chat_messages 逐轮核对确认）：
+    # 上面的 Unit 下拉框正确用 index= 读 st.session_state.curr_unit，
+    # 但这个 Concept 下拉框此前一直没有对应的 index= 参数。只要
+    # curr_unit 发生变化（哪怕只是后端 resolved_concept_id 自动同步
+    # 触发的，不是用户手动点的），这个下拉框的选项列表就会跟着变，
+    # Streamlit 在没有 index= 的情况下会默认跳回新列表的第0项——
+    # Unit 4 的第0项是"4.1 极值定理"，跟实际想切换到的概念（比如
+    # 4.3 相关变化率）毫无关系，纯属选项顺序巧合。
+    #
+    # 实际影响：这个 bug 会把"对话内概念漂移修复(五)"（一轮内完成
+    # 切换）的效果就地抵消——后端本轮已经正确切到新概念、教学内容也
+    # 正确生成了，但这个下拉框会在同一次 rerun 里把 curr_concept 又
+    # 扳回该 Unit 的默认第0项，触发"侧边栏切换"分支，清空对话、重新
+    # 生成一个（错误概念的）开场白，看起来像是切换完全没生效。之所以
+    # 昨晚测分部积分法(B1)时看似成功，是因为 B1 所在的"BC Toolkit"
+    # 这个 Unit 底下只有 B1 一个概念，第0项恰好就是目标本身，巧合
+    # 掩盖了这个 bug；今天切到有多个概念的 Unit 4 才第一次真正暴露。
+    #
+    # 修复：给这个下拉框补上和 Unit 下拉框同款的防御性 index= 逻辑。
+    # ================================================================
+    _concept_options = list(_filtered_UNITS().get(selected_unit, UNITS.get(selected_unit, {})).keys())
+    selected_concept = st.selectbox(L["select_concept"], _concept_options,
+        index=_concept_options.index(st.session_state.curr_concept)
+        if st.session_state.curr_concept in _concept_options else 0)
     if (selected_unit != st.session_state.curr_unit or
             selected_concept != st.session_state.curr_concept):
         st.session_state.curr_unit = selected_unit
