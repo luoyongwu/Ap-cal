@@ -871,9 +871,56 @@ if st.session_state.backend == "railway" and not st.session_state.session_token:
 # 测试场景里平白多刷新。interval 单位是毫秒，25秒一次，用来防止
 # 亮屏静默期间代理层的 idle timer 把 WebSocket 连接判定为空闲断开。
 # ================================================================
+# ================================================================
+# 2026-09-09 Bug 1 修复：轮询对账兜底
+# ----------------------------------------------------------------
+# 背景见 memory /areas/luo-cal-ole.md "Bug 1 root-cause confirmed
+# 2026-09-09"节：三次可控复现确认后端总是瞬间处理完并写库，卡顿
+# 100%出在系统内部自动触发的 st.rerun() 有时未能把更新推送到
+# 浏览器（不是后端慢、也不是彻底断线——彻底断线走的是另一条已
+# 验证过的 attempt_session_restore() 路径）。而用户主动提交新
+# 消息触发的 rerun 每次都能可靠地把之前卡住的内容一并冲刷出来。
+#
+# 修复：复用已有的 /api/v1/session/restore 端点（不新增后端
+# 接口），每次 25 秒心跳时顺便查一次后端记录的消息数；如果比
+# 本地多，说明有更新没推送成功，直接用后端返回的完整历史覆盖
+# 本地并强制 rerun。网络失败静默跳过，等下一个心跳周期再试，
+# 不影响正常使用。
+# ================================================================
+def sync_missed_messages():
+    """核对是否有已经在后端完成、但因为推送失败而没有实时显示的
+    消息。复用 /api/v1/session/restore，不需要后端改动。"""
+    token = st.session_state.get("session_token")
+    session_id = st.session_state.get("session_id")
+    if not token or not session_id:
+        return
+    import urllib.request, json, urllib.error
+    req = urllib.request.Request(
+        f"{RailwayAdapter.BACKEND_URL}/api/v1/session/restore?session_id={session_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=10) as r:
+            result = json.loads(r.read())
+        remote_messages = [
+            {"role": m["role"], "content": m["content"]}
+            for m in result.get("messages", [])
+        ]
+        local_messages = st.session_state.get("messages", [])
+        if len(remote_messages) > len(local_messages):
+            st.session_state.messages = remote_messages
+            st.rerun()
+    except Exception:
+        # 静默失败：轮询本身的网络问题不应该打断正常使用，
+        # 下一个 25 秒心跳周期会再试一次。
+        pass
+# ================================================================
+# 轮询对账兜底结束
+# ================================================================
 if (_AUTOREFRESH_AVAILABLE and st.session_state.backend == "railway"
         and st.session_state.session_token):
     st_autorefresh(interval=25000, key="keepalive_autorefresh")
+    sync_missed_messages()
 
 if show_test:
     st.subheader(L["test_panel"])
