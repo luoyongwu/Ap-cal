@@ -965,7 +965,8 @@ if st.session_state.backend == "railway" and not st.session_state.session_token:
 # ================================================================
 def sync_missed_messages():
     """核对是否有已经在后端完成、但因为推送失败而没有实时显示的
-    消息。复用 /api/v1/session/restore，不需要后端改动。"""
+    消息。复用 /api/v1/session/restore，不需要后端改动。
+    2026-09-10 概念切换卡死bug修复：见下方 if 条件里的详细说明。"""
     token = st.session_state.get("session_token")
     session_id = st.session_state.get("session_id")
     if not token or not session_id:
@@ -983,7 +984,26 @@ def sync_missed_messages():
             for m in result.get("messages", [])
         ]
         local_messages = st.session_state.get("messages", [])
-        if len(remote_messages) > len(local_messages):
+        # ===== 2026-09-10 概念切换卡死bug修复 =====
+        # 根因（2026-09-10 track持久化修复上线后首次通过"手动切概念"
+        # 复现，实测确认）：切换 Unit/Concept、点"刷新当前概念"按钮、
+        # 切换backend、登录成功这几处，都会先把 st.session_state.
+        # messages 清空为 []、再 st.rerun()，目的是让下面"if not
+        # st.session_state.messages:"那段重新生成一个新概念的开场白。
+        # 但清空后的下一轮脚本执行会先跑到这里——此时本地0条消息，
+        # 后端却还留着上一个概念的完整历史（往往不止0条），被误判成
+        # "有消息推送失败没显示"，于是把上一个概念的旧历史整个覆盖
+        # 回本地并强制 rerun，抢在"生成新开场白"那段代码之前发生，
+        # 导致新概念的开场白永远没机会生成——页面标题会跟着
+        # curr_concept 正确更新，但对话内容永久卡在最后一次真正生成
+        # 过的旧内容上，不管之后再切换到哪个概念都无法恢复，"刷新
+        # 当前概念"按钮同样会被这个机制吃掉。
+        # 修复：只有本地已经有至少一条消息（说明是"对话进行中、
+        # 某一轮没显示出来"这种真正的Bug 1场景）时，才允许用远端
+        # 历史覆盖本地。本地是刚被有意清空成[]的情况（无论是切概念、
+        # 刷新按钮、切backend还是登录），一律不在这里介入，交给下面
+        # is_initializing 那套机制正常走完"生成新开场白"的流程。
+        if local_messages and len(remote_messages) > len(local_messages):
             st.session_state.messages = remote_messages
             st.rerun()
     except Exception:
