@@ -233,6 +233,11 @@ def railway_login(login_code: str) -> bool:
         # 或上一位学生在同一浏览器会话里最后停留的概念——这是已有行为，
         # 不属于本次修复范围）。
         _sync_concept_to_url()
+        # ===== 2026-09-10 track持久化修复新增 =====
+        # 登录这一刻的轨道状态（AB/BC）也一并写入URL，和概念状态
+        # 对称处理。见 _sync_track_to_url() 和 attempt_session_restore()
+        # 内部的详细说明。
+        _sync_track_to_url()
         return True
     except urllib.error.HTTPError as e:
         try:
@@ -282,6 +287,29 @@ def _sync_concept_to_url():
 
 
 # ================================================================
+# 2026-09-10 track持久化修复 — student_track URL 同步辅助函数
+# ----------------------------------------------------------------
+# 背景（详见 memory /areas/luo-cal-ole.md 和 /areas/luo-cal.md）：
+# student_track（AB/BC）此前完全没有任何URL持久化路径——只在登录/
+# 切概念时同步的是concept，从未有对应的track同步。2026-09-09实测
+# 确认：只要 session_state 被清空一次（真断线，或用户手动整页
+# 刷新），track 就会无条件回落到默认值"AB"。这不只是显示问题——
+# AB轨道下 _filtered_UNITS() 会隐藏掉"BC Toolkit"等BC专属Unit，
+# 即使概念本身被正确恢复成BC概念（比如B1），侧边栏下拉框也会因为
+# 选项列表里找不到对应Unit而被迫跳回第0项，连带把概念、页面标题
+# 都扯歪——这正是"概念1.1错误标签"那条bug的真正根因。
+#
+# 修复：和 _sync_concept_to_url() 完全对称，把 student_track 也
+# 写进URL query params（?track=AB 或 ?track=BC），在
+# attempt_session_restore() 里一并读回并 rehydrate。
+# ================================================================
+def _sync_track_to_url():
+    """把当前 st.session_state.student_track 写入 URL query params，
+    供 attempt_session_restore() 断线重连/整页刷新后取回。"""
+    st.query_params["track"] = st.session_state.student_track
+
+
+# ================================================================
 # 2026-09-03 item3 修复 — 断线复原函数
 # ================================================================
 def attempt_session_restore():
@@ -292,7 +320,10 @@ def attempt_session_restore():
     静默回退到正常登录流程，不会报错崩溃。
     2026-09-04 记录统一性修复：同时读回 URL 里的 concept 参数（若存在），
     一并 rehydrate curr_unit/curr_concept，避免断线重连后 concept_id
-    静默回落到侧边栏默认值 "1.1"。"""
+    静默回落到侧边栏默认值 "1.1"。
+    2026-09-10 track持久化修复：同时读回 URL 里的 track 参数（若存在），
+    一并 rehydrate student_track，避免断线重连/整页刷新后轨道悄悄
+    回落到默认值 "AB"（见 _sync_track_to_url() 处的详细说明）。"""
     if st.session_state.get("session_token"):
         return  # 已经有有效登录状态，不需要复原
     auth_param = st.query_params.get("auth")
@@ -329,6 +360,19 @@ def attempt_session_restore():
             _restored_unit, _restored_concept = CONCEPT_ID_TO_LOCATION[concept_param]
             st.session_state.curr_unit = _restored_unit
             st.session_state.curr_concept = _restored_concept
+        # ===== 2026-09-10 track持久化修复新增：一并复原 student_track =====
+        # 见本函数 docstring 及 _sync_track_to_url() 处的详细根因说明。
+        # 找不到该参数，或参数值不是合法轨道（"AB"/"BC"）时，静默保留
+        # 默认值，不报错、不中断复原流程。
+        # 注意：这个函数被调用的位置（脚本靠后，UNITS已定义之后）比
+        # 轨道单选框小部件渲染的位置更晚——原本轨道单选框在文件更
+        # 靠前的地方渲染，早于这次调用，导致哪怕这里恢复对了值，也
+        # 来不及影响已经渲染完的小部件。这次修复把轨道单选框的小部件
+        # 本身也挪到了本函数调用之后（见文件下方新位置），两者需要
+        # 配合才能生效，缺一不可。
+        track_param = st.query_params.get("track")
+        if track_param in ("AB", "BC"):
+            st.session_state.student_track = track_param
     except Exception:
         # token 失效、过期，或后端暂时不可用：清掉 URL 里的陈旧参数，
         # 让脚本继续往下走正常的登录流程，不抛异常打断整个页面。
@@ -341,17 +385,6 @@ def attempt_session_restore():
 # 断线复原函数结束
 # ================================================================
 
-
-if "student_track" not in st.session_state:
-    st.session_state.student_track = "AB"
-
-with st.sidebar:
-    selected_track = st.radio("学习轨道 / Track", options=["AB", "BC"],
-        index=0 if st.session_state.student_track == "AB" else 1,
-        horizontal=True, key="track_radio")
-    if selected_track != st.session_state.student_track:
-        st.session_state.student_track = selected_track
-        st.rerun()
 
 UNITS = {
     "Unit 1: 极限与连续": {
@@ -572,6 +605,17 @@ for k, v in {
     # 显示那条陈旧记录，看起来像是"当前这一轮的实时评分"，实际上和
     # 当前对话完全无关。这里补上默认值，下面三处重置逻辑里补上清空。
     "leakage_log": [],
+    # ---- 2026-09-10 track持久化修复：student_track 并入统一初始化字典 ----
+    # 之前 student_track 的默认值是单独在文件靠前位置初始化的（和这份
+    # 统一字典分开），而且紧跟着的轨道单选框小部件也在那个更靠前的
+    # 位置渲染——都早于 attempt_session_restore() 被调用，导致哪怕
+    # 后来在 attempt_session_restore() 里加上恢复逻辑，也来不及影响
+    # 这次渲染。现在把默认值初始化并入这份统一字典（和其它字段一样，
+    # 只在 session_state 里还没有这个 key 时才赋默认值），实际的轨道
+    # 单选框小部件则挪到 attempt_session_restore() 调用之后再渲染
+    # （见下方新位置），确保恢复逻辑总有机会先跑完。详见
+    # attempt_session_restore() 和 _sync_track_to_url() 内部说明。
+    "student_track": "AB",
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -581,7 +625,37 @@ for k, v in {
 # 且 URL 里带着有效的 auth/sid，这里会把登录状态和历史消息补回来。
 # 2026-09-04 记录统一性修复：同批复原逻辑现在也会一并 rehydrate
 # curr_unit/curr_concept（见 attempt_session_restore() 内部注释）。
+# 2026-09-10 track持久化修复：同批复原逻辑现在也会一并 rehydrate
+# student_track（见 attempt_session_restore() 内部注释）。
 attempt_session_restore()
+
+# ================================================================
+# 2026-09-10 track持久化修复：轨道单选框挪到这里
+# ----------------------------------------------------------------
+# 根因见上面 attempt_session_restore() 和 _sync_track_to_url() 内部
+# 的详细说明：这个小部件原来在文件更靠前的位置渲染（甚至在
+# attempt_session_restore() 被调用之前），导致哪怕恢复逻辑本身写对
+# 了，也已经来不及影响这次渲染——用户会先看到一闪而过的默认值
+# "AB"，如果概念也跟着回落（因为BC专属Unit在AB轨道下被隐藏），
+# 甚至纠正不回来，这正是"概念1.1错误标签"那条bug的真正根因。
+# 现在把小部件挪到 attempt_session_restore() 调用之后，确保恢复
+# 逻辑总是先于这个小部件的渲染完成。用户手动切换轨道时也一并
+# 同步写入URL（对称于概念切换已有的处理方式）。
+#
+# 副作用（已知、可接受）：这个小部件在侧边栏里的视觉位置从"最
+# 顶部"变成了"语言/后端选择/登录区域之后"（紧接在Unit/Concept
+# 下拉框前面）。这次修复的目标是先保证状态持久化本身正确；如果
+# 之后觉得视觉顺序需要调整，是纯UI改动，和这里的持久化逻辑互不
+# 影响，可以随时单独调整。
+# ================================================================
+with st.sidebar:
+    selected_track = st.radio("学习轨道 / Track", options=["AB", "BC"],
+        index=0 if st.session_state.student_track == "AB" else 1,
+        horizontal=True, key="track_radio")
+    if selected_track != st.session_state.student_track:
+        st.session_state.student_track = selected_track
+        _sync_track_to_url()
+        st.rerun()
 
 if not st.session_state.key_confirmed:
     _b = st.session_state.backend
@@ -675,7 +749,9 @@ with st.sidebar:
                 # 下一位在同一浏览器登录的学生短暂"继承"上一位的概念 URL
                 # 参数（railway_login() 成功后会立即用新学生自己当前的
                 # curr_unit/curr_concept 覆盖它，但登出后先清空更干净）。
-                for _p in ("auth", "sid", "concept"):
+                # 2026-09-10 track持久化修复新增：一并清掉 track 参数，
+                # 理由同concept——避免下一位学生短暂"继承"上一位的轨道。
+                for _p in ("auth", "sid", "concept", "track"):
                     try:
                         del st.query_params[_p]
                     except KeyError:
