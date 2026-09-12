@@ -108,10 +108,17 @@ class RailwayAdapter:
         # ===== 2026-09-04 记录统一性修复（对话内概念漂移）新增 =====
         # 把当前学生轨道一并传给后端，后端用它过滤 actual_concept_id
         # 分类调用的合法闭集（AB 轨道看不到 BC-only 概念）。
+        # ===== Bug 2a (2026-09-11起) 新增 =====
+        # new_problem_requested 只在进入概念/刷新/切换概念成功这三个
+        # 触发点被设为 True（见对应位置的赋值），这里读取后立即消费并
+        # 重置为 False，避免同一概念会话里后续普通对话轮次被误当成
+        # "新题请求"反复触发类型选择。
         payload = {"concept_id": concept_id,
                    "user_input": last_user, "session_id": session_id,
                    "language": lang,
-                   "student_track": st.session_state.get("student_track", "AB")}
+                   "student_track": st.session_state.get("student_track", "AB"),
+                   "new_problem_requested": st.session_state.get("new_problem_requested", False)}
+        st.session_state["new_problem_requested"] = False
         req = urllib.request.Request(
             f"{self.BACKEND_URL}/api/v1/chat",
             data=json.dumps(payload).encode(),
@@ -616,6 +623,10 @@ for k, v in {
     # （见下方新位置），确保恢复逻辑总有机会先跑完。详见
     # attempt_session_restore() 和 _sync_track_to_url() 内部说明。
     "student_track": "AB",
+    # Bug 2a (2026-09-11起) 新增：仅在进入概念/刷新按钮/切换概念成功
+    # 这三个已知触发点被设为 True，驱动后端 per-concept 换题类型循环；
+    # RailwayAdapter.chat() 读取后立即消费并重置为 False（见该处说明）。
+    "new_problem_requested": False,
 }.items():
     if k not in st.session_state:
         st.session_state[k] = v
@@ -765,6 +776,7 @@ with st.sidebar:
                     if railway_login(login_code_input):
                         st.session_state.messages = []
                         st.session_state.leakage_log = []  # 2026-08 修复：登录成功时一并清空
+                        st.session_state.new_problem_requested = True  # Bug 2a：登录后首次进入概念，触发新题类型选择
                         st.rerun()
                     else:
                         st.error(st.session_state.get("_login_error", "登录失败"))
@@ -815,6 +827,7 @@ with st.sidebar:
         st.session_state.mastery_ready = False
         st.session_state.mastery_scores = {}
         st.session_state.leakage_log = []  # 2026-08 修复：切换概念时一并清空
+        st.session_state.new_problem_requested = True  # Bug 2a：切换概念触发新题类型选择
         # 注：按方案B（2026-09-03 已确认），session_id 不在这里重新
         # 生成——只在登录时生成一次。切概念时后端历史依然共享同一个
         # session_id（用于出题查重），只是前端本地展示清空。
@@ -1069,6 +1082,7 @@ if st.button(L["refresh"]):
     st.session_state.mastery_ready = False
     st.session_state.mastery_scores = {}
     st.session_state.leakage_log = []  # 2026-08 修复：点"刷新当前概念"时一并清空
+    st.session_state.new_problem_requested = True  # Bug 2a：刷新触发新题类型选择
     st.rerun()
 
 for i, m in enumerate(st.session_state.messages):
